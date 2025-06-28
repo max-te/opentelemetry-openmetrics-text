@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
@@ -103,7 +103,7 @@ fn write_histogram<T: FastDisplay + Copy>(
     name: String,
     scope_name: &str,
     histogram: &opentelemetry_sdk::metrics::data::Histogram<T>,
-) -> Result<(), std::fmt::Error> {
+) -> std::fmt::Result {
     let scope_name_attrs = &[KeyValue::new("otel_scope_name", scope_name.to_owned())];
     writeln!(f, "# TYPE {name} histogram")?;
     let ts = to_timestamp(histogram.time());
@@ -174,7 +174,7 @@ fn write_counter<T: FastDisplay + Copy>(
     name: String,
     scope_name: &str,
     sum: &opentelemetry_sdk::metrics::data::Sum<T>,
-) -> Result<(), std::fmt::Error> {
+) -> std::fmt::Result {
     let scope_name_attrs = &[KeyValue::new("otel_scope_name", scope_name.to_owned())];
     assert_eq!(
         sum.temporality(),
@@ -213,7 +213,7 @@ fn write_gauge<T: FastDisplay + Copy>(
     name: String,
     scope_name: &str,
     gauge: &opentelemetry_sdk::metrics::data::Gauge<T>,
-) -> Result<(), std::fmt::Error> {
+) -> std::fmt::Result {
     let scope_name_attrs = &[KeyValue::new("otel_scope_name", scope_name.to_owned())];
     writeln!(f, "# TYPE {name} gauge")?;
     let ts = to_timestamp(gauge.time());
@@ -236,21 +236,29 @@ fn to_timestamp(time: std::time::SystemTime) -> impl Display {
     ts.fast_display()
 }
 
+#[inline]
 fn print_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> String {
     let mut result = String::new();
-    for attr in attrs {
-        if !result.is_empty() {
-            result.push(',');
-        }
-        write!(
-            &mut result,
-            "{k}=\"{v}\"",
-            k = sanitize_name(attr.key.as_str()),
-            v = escape_label_value(&attr.value.as_str())
-        )
-        .unwrap();
-    }
+    write_attrs(&mut result, attrs).unwrap();
     result
+}
+
+fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>>(
+    f: &mut impl std::fmt::Write,
+    attrs: I,
+) -> std::fmt::Result {
+    let mut first = true;
+    for attr in attrs {
+        if !first {
+            f.write_char(',')?;
+        }
+        f.write_str(&sanitize_name(attr.key.as_str()))?;
+        f.write_str("=\"")?;
+        f.write_str(&escape_label_value(&attr.value.as_str()))?;
+        f.write_char('"')?;
+        first = false;
+    }
+    Ok(())
 }
 
 fn escape_label_value<'a>(value: &'a str) -> Cow<'a, str> {
