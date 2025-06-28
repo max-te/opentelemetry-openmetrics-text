@@ -1,7 +1,6 @@
 use std::hint::black_box;
-use std::time::Duration;
+use std::rc::Rc;
 
-use criterion::{Criterion, criterion_group, criterion_main};
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry_openmetrics::convert::ToOpenMetrics;
@@ -9,8 +8,9 @@ use opentelemetry_openmetrics::testsupport::TestMetricsReader;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::reader::MetricReader;
+use tango_bench::{IntoBenchmarks, benchmark_fn, tango_benchmarks, tango_main};
 
-pub fn criterion_benchmark(c: &mut Criterion) {
+pub fn benchmarks() -> impl IntoBenchmarks {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -53,22 +53,20 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             ],
         );
     }
-
     let mut metrics = ResourceMetrics::default();
     reader.collect(&mut metrics).unwrap();
+    let metrics = Rc::new(metrics);
 
-    let mut group = c.benchmark_group("Display");
-    group.measurement_time(Duration::from_secs(10));
-
-    let mut buffer = String::new();
-    group.bench_function("display", |b| {
-        b.iter(|| {
+    [benchmark_fn("display", move |b| {
+        let met = metrics.clone();
+        let mut buffer = String::new();
+        b.iter(move || {
             use std::fmt::Write;
             buffer.clear();
-            write!(&mut buffer, "{}", black_box(ToOpenMetrics(&metrics)))
+            write!(&mut buffer, "{}", black_box(ToOpenMetrics(&met)))
         })
-    });
+    })]
 }
 
-criterion_group!(benches, criterion_benchmark);
-criterion_main!(benches);
+tango_benchmarks!(benchmarks());
+tango_main!();
