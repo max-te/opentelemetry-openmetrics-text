@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
@@ -28,11 +28,9 @@ impl<'a> Display for ToOpenMetrics<'a> {
                     writeln!(f, "# UNIT {name} {unit}")?;
                 }
                 if !metric.description().is_empty() {
-                    writeln!(
-                        f,
-                        "# HELP {name} {}",
-                        escape_label_value(metric.description())
-                    )?;
+                    write!(f, "# HELP {name} ")?;
+                    write_escaped(f, metric.description())?;
+                    f.write_char('\n')?;
                 }
                 match metric.data() {
                     opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
@@ -254,37 +252,37 @@ fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>>(
         }
         f.write_str(&sanitize_name(attr.key.as_str()))?;
         f.write_str("=\"")?;
-        f.write_str(&escape_label_value(&attr.value.as_str()))?;
+        write_escaped(f, &attr.value.as_str())?;
         f.write_char('"')?;
         first = false;
     }
     Ok(())
 }
 
-fn escape_label_value<'a>(value: &'a str) -> Cow<'a, str> {
+fn write_escaped(f: &mut impl Write, value: &str) -> std::fmt::Result {
     let mut bytes = value.as_bytes();
     let first_escape = memchr::memchr3(b'\\', b'"', b'\n', bytes);
     let Some(first_escape) = first_escape else {
-        return Cow::Borrowed(value);
+        return f.write_str(unsafe { str::from_utf8_unchecked(bytes) });
     };
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len() * 2);
     let (head, tail) = bytes.split_at(first_escape);
-    out.extend_from_slice(head);
-    out.push(b'\\');
+    f.write_str(unsafe { str::from_utf8_unchecked(head) })?;
+    f.write_char('\\')?;
     bytes = tail;
 
     while let Some(next_escape) = memchr::memchr3(b'\\', b'"', b'\n', bytes) {
-        out.extend_from_slice(&bytes[..next_escape]);
-        out.push(b'\\');
-        bytes = &bytes[next_escape + 1..];
+        let (head, tail) = bytes.split_at(next_escape);
+        f.write_str(unsafe { str::from_utf8_unchecked(head) })?;
+        f.write_char('\\')?;
+        match tail[0] {
+            b'\\' => f.write_char('\\'),
+            b'"' => f.write_char('"'),
+            b'\n' => f.write_char('n'),
+            _ => unreachable!(),
+        }?;
+        bytes = &tail[1..];
     }
-    out.extend_from_slice(bytes);
-
-    Cow::Owned(unsafe {
-        // SAFETY: The bytes are valid UTF-8 because they were obtained from a string.
-        // Only valid UTF-8 characters are inserted in valid positions.
-        String::from_utf8_unchecked(out)
-    })
+    f.write_str(unsafe { str::from_utf8_unchecked(bytes) })
 }
 
 fn sanitize_name(name: &str) -> String {
