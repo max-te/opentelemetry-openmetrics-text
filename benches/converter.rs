@@ -59,8 +59,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("Display");
     group.measurement_time(Duration::from_secs(10));
+
+    let mut buffer = String::new();
     group.bench_function("display", |b| {
-        b.iter(|| format!("{}", black_box(ToOpenMetrics(&metrics))))
+        b.iter(|| {
+            use std::fmt::Write;
+            buffer.clear();
+            write!(&mut buffer, "{}", black_box(ToOpenMetrics(&metrics)))
+        })
     });
 }
 

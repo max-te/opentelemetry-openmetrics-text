@@ -4,11 +4,13 @@ version = "0.30.0"
 edition = "2024"
 
 [dependencies]
+itoa = "1.0.15"
 memchr = "2.7.5"
 opentelemetry = { version = "*", default-features = false }
 opentelemetry_sdk = { version = "0.30.0", default-features = false, features = [
     "metrics",
 ] }
+ryu = "1.0.20"
 tokio = { version = "1.45.1", default-features = false, features = [
     "sync",
 ], optional = true }

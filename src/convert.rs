@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::fmt::Write;
+use std::fmt::{Display, Write};
 
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
@@ -11,7 +11,7 @@ impl<'a> ToOpenMetrics<'a> {
         "application/openmetrics-text; version=1.0.0; charset=utf-8";
 }
 
-impl<'a> std::fmt::Display for ToOpenMetrics<'a> {
+impl<'a> Display for ToOpenMetrics<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
 
@@ -98,7 +98,7 @@ impl<'a> std::fmt::Display for ToOpenMetrics<'a> {
 //     Ok(())
 // }
 
-fn write_histogram<T: std::fmt::Display + Copy>(
+fn write_histogram<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
     name: String,
     scope_name: &str,
@@ -123,34 +123,53 @@ fn write_histogram<T: std::fmt::Display + Copy>(
 
         writeln!(
             f,
-            "{name}_count{{{attrs}}} {count} {ts}",
-            count = point.count()
+            "{name}_count{{{attrs}}} {value} {ts}",
+            value = point.count().fast_display()
         )?;
-        writeln!(f, "{name}_sum{{{attrs}}} {sum} {ts}", sum = point.sum())?;
+
+        writeln!(
+            f,
+            "{name}_sum{{{attrs}}} {value} {ts}",
+            value = point.sum().fast_display()
+        )?;
+
         // Non-compliant but useful:
         if let Some(min) = point.min() {
-            writeln!(f, "{name}_min{{{attrs}}} {min} {ts}",)?;
+            writeln!(
+                f,
+                "{name}_min{{{attrs}}} {value} {ts}",
+                value = min.fast_display()
+            )?;
         }
         if let Some(max) = point.max() {
-            writeln!(f, "{name}_max{{{attrs}}} {max} {ts}",)?;
+            writeln!(
+                f,
+                "{name}_max{{{attrs}}} {value} {ts}",
+                value = max.fast_display()
+            )?;
         }
 
         if !attrs.is_empty() {
             attrs.push(',');
         }
         for (bound, count) in std::iter::zip(point.bounds(), point.bucket_counts()) {
-            writeln!(f, "{name}_bucket{{{attrs}le=\"{bound}\"}} {count} {ts}")?;
+            writeln!(
+                f,
+                "{name}_bucket{{{attrs}le=\"{le}\"}} {value} {ts}",
+                le = bound.fast_display(),
+                value = count.fast_display()
+            )?;
         }
         writeln!(
             f,
-            "{name}_bucket{{{attrs}le=\"+Inf\"}} {count} {ts}",
-            count = point.count()
+            "{name}_bucket{{{attrs}le=\"+Inf\"}} {value} {ts}",
+            value = point.count().fast_display()
         )?;
     }
     Ok(())
 }
 
-fn write_counter<T: std::fmt::Display + Copy>(
+fn write_counter<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
     name: String,
     scope_name: &str,
@@ -170,7 +189,7 @@ fn write_counter<T: std::fmt::Display + Copy>(
             writeln!(
                 f,
                 "{name}_total{{{attrs}}} {value} {ts}",
-                value = point.value(),
+                value = point.value().fast_display(),
             )?;
         }
         Ok(())
@@ -179,13 +198,17 @@ fn write_counter<T: std::fmt::Display + Copy>(
         let ts = to_timestamp(sum.time());
         for point in sum.data_points() {
             let attrs = print_attrs(point.attributes().chain(scope_name_attrs));
-            writeln!(f, "{name}{{{attrs}}} {value} {ts}", value = point.value(),)?;
+            writeln!(
+                f,
+                "{name}{{{attrs}}} {value} {ts}",
+                value = point.value().fast_display()
+            )?;
         }
         Ok(())
     }
 }
 
-fn write_gauge<T: std::fmt::Display + Copy>(
+fn write_gauge<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
     name: String,
     scope_name: &str,
@@ -196,16 +219,21 @@ fn write_gauge<T: std::fmt::Display + Copy>(
     let ts = to_timestamp(gauge.time());
     for point in gauge.data_points() {
         let attrs = print_attrs(point.attributes().chain(scope_name_attrs));
-        writeln!(f, "{name}{{{attrs}}} {value} {ts}", value = point.value(),)?;
+        writeln!(
+            f,
+            "{name}{{{attrs}}} {value} {ts}",
+            value = point.value().fast_display()
+        )?;
     }
     Ok(())
 }
 
-fn to_timestamp(time: std::time::SystemTime) -> String {
-    time.duration_since(std::time::SystemTime::UNIX_EPOCH)
+fn to_timestamp(time: std::time::SystemTime) -> impl Display {
+    let ts = time
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .expect("Time went backwards")
-        .as_secs_f64()
-        .to_string()
+        .as_secs_f64();
+    ts.fast_display()
 }
 
 fn print_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> String {
@@ -273,5 +301,52 @@ fn convert_unit(short_unit: &str) -> String {
         "1" => "ratio".to_owned(),
         "By" => "bytes".to_owned(),
         _ => sanitize_name(short_unit),
+    }
+}
+
+trait FastDisplay {
+    fn fast_display(&self) -> impl Display + Copy + use<Self>;
+}
+
+#[derive(Copy, Clone)]
+struct RyuDisplay<N: ryu::Float>(N);
+
+impl<N: ryu::Float> Display for RyuDisplay<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buffer = ryu::Buffer::new();
+        let formatted = buffer.format(self.0);
+        f.write_str(formatted)
+    }
+}
+
+impl FastDisplay for f64 {
+    #[inline]
+    fn fast_display(&self) -> impl Display + Copy + use<> {
+        RyuDisplay(*self)
+    }
+}
+
+#[derive(Copy, Clone)]
+struct ItoaDisplay<N: itoa::Integer>(N);
+
+impl<N: itoa::Integer> Display for ItoaDisplay<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buffer = itoa::Buffer::new();
+        let formatted = buffer.format(self.0);
+        f.write_str(formatted)
+    }
+}
+
+impl FastDisplay for u64 {
+    #[inline]
+    fn fast_display(&self) -> impl Display + Copy + use<> {
+        ItoaDisplay(*self)
+    }
+}
+
+impl FastDisplay for i64 {
+    #[inline]
+    fn fast_display(&self) -> impl Display + Copy + use<> {
+        ItoaDisplay(*self)
     }
 }
