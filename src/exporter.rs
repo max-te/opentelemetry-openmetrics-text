@@ -17,6 +17,12 @@ pub struct OpenMetricsExporter {
     // TODO: replace this with something simpler like arc-swap
 }
 
+impl Default for OpenMetricsExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenMetricsExporter {
     pub fn new() -> Self {
         OpenMetricsExporter {
@@ -38,7 +44,7 @@ impl PushMetricExporter for OpenMetricsExporter {
         let mut nextbuffer = backbuffer.take().unwrap_or_default();
         nextbuffer.clear();
         write!(nextbuffer, "{}", ToOpenMetrics(metrics)).map_err(|err| {
-            OTelSdkError::InternalFailure(format!("Failed to write to buffer: {}", err))
+            OTelSdkError::InternalFailure(format!("Failed to write to buffer: {err}"))
         })?;
 
         let mut buffer = self.buffer.write().await;

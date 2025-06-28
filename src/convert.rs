@@ -23,9 +23,9 @@ impl<'a> std::fmt::Display for ToOpenMetrics<'a> {
                 let mut name = sanitize_name(metric.name());
                 let unit = convert_unit(metric.unit());
                 if !unit.is_empty() {
-                    name.push_str("_");
+                    name.push('_');
                     name.push_str(&unit);
-                    writeln!(f, "# UNIT {name} {}", unit)?;
+                    writeln!(f, "# UNIT {name} {unit}")?;
                 }
                 if !metric.description().is_empty() {
                     writeln!(
@@ -118,7 +118,7 @@ fn write_histogram<T: std::fmt::Display + Copy>(
         opentelemetry_sdk::metrics::Temporality::Cumulative,
         "Only cumulative Histograms are supported"
     );
-    Ok(for point in histogram.data_points() {
+    for point in histogram.data_points() {
         let mut attrs = print_attrs(point.attributes().chain(scope_name_attrs.iter()));
 
         writeln!(
@@ -146,7 +146,8 @@ fn write_histogram<T: std::fmt::Display + Copy>(
             "{name}_bucket{{{attrs}le=\"+Inf\"}} {count} {ts}",
             count = point.count()
         )?;
-    })
+    }
+    Ok(())
 }
 
 fn write_counter<T: std::fmt::Display + Copy>(
@@ -164,21 +165,23 @@ fn write_counter<T: std::fmt::Display + Copy>(
     if sum.is_monotonic() {
         writeln!(f, "# TYPE {name} counter")?;
         let ts = to_timestamp(sum.time());
-        Ok(for point in sum.data_points() {
+        for point in sum.data_points() {
             let attrs = print_attrs(point.attributes().chain(scope_name_attrs));
             writeln!(
                 f,
                 "{name}_total{{{attrs}}} {value} {ts}",
                 value = point.value(),
             )?;
-        })
+        }
+        Ok(())
     } else {
         writeln!(f, "# TYPE {name} gauge")?;
         let ts = to_timestamp(sum.time());
-        Ok(for point in sum.data_points() {
+        for point in sum.data_points() {
             let attrs = print_attrs(point.attributes().chain(scope_name_attrs));
             writeln!(f, "{name}{{{attrs}}} {value} {ts}", value = point.value(),)?;
-        })
+        }
+        Ok(())
     }
 }
 
@@ -191,10 +194,11 @@ fn write_gauge<T: std::fmt::Display + Copy>(
     let scope_name_attrs = &[KeyValue::new("otel_scope_name", scope_name.to_owned())];
     writeln!(f, "# TYPE {name} gauge")?;
     let ts = to_timestamp(gauge.time());
-    Ok(for point in gauge.data_points() {
+    for point in gauge.data_points() {
         let attrs = print_attrs(point.attributes().chain(scope_name_attrs));
         writeln!(f, "{name}{{{attrs}}} {value} {ts}", value = point.value(),)?;
-    })
+    }
+    Ok(())
 }
 
 fn to_timestamp(time: std::time::SystemTime) -> String {
@@ -213,7 +217,7 @@ fn print_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> String {
         write!(
             &mut result,
             "{k}=\"{v}\"",
-            k = sanitize_name(&attr.key.as_str()),
+            k = sanitize_name(attr.key.as_str()),
             v = escape_label_value(&attr.value.as_str())
         )
         .unwrap();
@@ -229,7 +233,7 @@ fn escape_label_value<'a>(value: &'a str) -> Cow<'a, str> {
     };
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
     let (head, tail) = bytes.split_at(first_escape);
-    out.extend_from_slice(&head);
+    out.extend_from_slice(head);
     out.push(b'\\');
     bytes = tail;
 
@@ -249,7 +253,6 @@ fn escape_label_value<'a>(value: &'a str) -> Cow<'a, str> {
 
 fn sanitize_name(name: &str) -> String {
     name.chars()
-        .into_iter()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == ':' {
                 c
