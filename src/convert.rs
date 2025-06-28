@@ -11,6 +11,14 @@ impl<'a> ToOpenMetrics<'a> {
         "application/openmetrics-text; version=1.0.0; charset=utf-8";
 }
 
+macro_rules! fprint {
+    ($dst:expr, $($arg:expr),*) => {
+        $(
+            $arg.fmt($dst)?;
+        )*
+    };
+}
+
 impl<'a> Display for ToOpenMetrics<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
@@ -111,7 +119,7 @@ fn write_histogram<T: FastDisplay + Copy>(
     temp_buffer.clear();
     let attrs = temp_buffer;
     write_attrs(attrs, scope_name_attrs.iter())?;
-    writeln!(f, "{name}_created{{{attrs}}} {created}")?;
+    fprint!(f, name, "_created{", attrs, "} ", created, '\n');
     assert_eq!(
         histogram.temporality(),
         opentelemetry_sdk::metrics::Temporality::Cumulative,
@@ -121,17 +129,29 @@ fn write_histogram<T: FastDisplay + Copy>(
         attrs.clear();
         write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
 
-        writeln!(
+        fprint!(
             f,
-            "{name}_count{{{attrs}}} {value} {ts}",
-            value = point.count().fast_display()
-        )?;
+            name,
+            "_count{",
+            attrs,
+            "} ",
+            point.count().fast_display(),
+            ' ',
+            ts,
+            '\n'
+        );
 
-        writeln!(
+        fprint!(
             f,
-            "{name}_sum{{{attrs}}} {value} {ts}",
-            value = point.sum().fast_display()
-        )?;
+            name,
+            "_sum{",
+            attrs,
+            "} ",
+            point.sum().fast_display(),
+            ' ',
+            ts,
+            '\n'
+        );
 
         // Non-compliant but useful:
         if let Some(min) = point.min() {
@@ -153,12 +173,19 @@ fn write_histogram<T: FastDisplay + Copy>(
             attrs.push(',');
         }
         for (bound, count) in std::iter::zip(point.bounds(), point.bucket_counts()) {
-            writeln!(
+            fprint!(
                 f,
-                "{name}_bucket{{{attrs}le=\"{le}\"}} {value} {ts}",
-                le = bound.fast_display(),
-                value = count.fast_display()
-            )?;
+                name,
+                "_bucket{",
+                attrs,
+                "le=\"",
+                bound.fast_display(),
+                "\"}",
+                count.fast_display(),
+                ' ',
+                ts,
+                '\n'
+            );
         }
         writeln!(
             f,
