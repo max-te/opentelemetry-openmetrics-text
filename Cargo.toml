@@ -1,0 +1,28 @@
+[package]
+name = "opentelemetry-openmetrics"
+version = "0.30.0"
+edition = "2024"
+
+[dependencies]
+memchr = "2.7.5"
+opentelemetry = { version = "*", default-features = false }
+opentelemetry_sdk = { version = "0.30.0", default-features = false, features = [
+    "metrics",
+] }
+tokio = { version = "1.45.1", default-features = false, features = [
+    "sync",
+], optional = true }
+tracing = { version = "0.1.41", optional = true }
+
+[features]
+exporter = ["dep:tokio"]
+tracing = ["dep:tracing"]
+testing = ["opentelemetry_sdk/experimental_metrics_custom_reader"]
+default = ["tracing", "exporter", "testing"]
+
+[dev-dependencies]
+criterion = "0.6"
+
+[[bench]]
+name = "converter"
+harness = false
