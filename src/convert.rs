@@ -267,7 +267,7 @@ fn escape_label_value<'a>(value: &'a str) -> Cow<'a, str> {
     let Some(first_escape) = first_escape else {
         return Cow::Borrowed(value);
     };
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len() * 2);
     let (head, tail) = bytes.split_at(first_escape);
     out.extend_from_slice(head);
     out.push(b'\\');
