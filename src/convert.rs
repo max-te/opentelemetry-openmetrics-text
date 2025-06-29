@@ -89,6 +89,7 @@ impl<'a> Display for ToOpenMetrics<'a> {
                 }
             }
         }
+        writeln!(f, "# EOF")?;
         Ok(())
     }
 }
