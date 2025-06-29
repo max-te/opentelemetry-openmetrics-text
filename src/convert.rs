@@ -29,6 +29,11 @@ impl<'a> Display for ToOpenMetrics<'a> {
             let scope_name = scope.scope().name();
 
             for metric in scope.metrics() {
+                let Ok(typ) = get_type(metric.data()) else {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("Unsupported metric type {metric:?}");
+                    continue;
+                };
                 let mut name = sanitize_name(metric.name());
                 let unit = convert_unit(metric.unit());
                 if !unit.is_empty() {
@@ -36,7 +41,7 @@ impl<'a> Display for ToOpenMetrics<'a> {
                     name.push_str(&unit);
                 }
 
-                writeln!(f, "# TYPE {name} {typ}", typ = get_type(metric))?;
+                writeln!(f, "# TYPE {name} {typ}")?;
 
                 if !unit.is_empty() {
                     writeln!(f, "# UNIT {name} {unit}")?;
@@ -46,7 +51,7 @@ impl<'a> Display for ToOpenMetrics<'a> {
                     write_escaped(f, metric.description())?;
                     f.write_char('\n')?;
                 }
-                write_values(f, &mut temp_buffer, scope_name, metric, &name)?;
+                write_values(f, &mut temp_buffer, scope_name, metric.data(), &name)?;
             }
         }
         writeln!(f, "# EOF")?;
@@ -54,54 +59,50 @@ impl<'a> Display for ToOpenMetrics<'a> {
     }
 }
 
-fn get_type(metric: &opentelemetry_sdk::metrics::data::Metric) -> &'static str {
-    match metric.data() {
+fn get_type(
+    metric: &opentelemetry_sdk::metrics::data::AggregatedMetrics,
+) -> Result<&'static str, ()> {
+    match metric {
         opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
             match metric_data {
-                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => "gauge",
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => Ok("gauge"),
                 opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
                     if sum.is_monotonic() {
-                        "counter"
+                        Ok("counter")
                     } else {
-                        "gauge"
+                        Ok("gauge")
                     }
                 }
-                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => "histogram",
-                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => {
-                    unimplemented!()
-                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => Ok("histogram"),
+                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => Err(()),
             }
         }
         opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(metric_data) => {
             match metric_data {
-                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => "gauge",
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => Ok("gauge"),
                 opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
                     if sum.is_monotonic() {
-                        "counter"
+                        Ok("counter")
                     } else {
-                        "gauge"
+                        Ok("gauge")
                     }
                 }
-                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => "histogram",
-                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => {
-                    unimplemented!()
-                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => Ok("histogram"),
+                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => Err(()),
             }
         }
         opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(metric_data) => {
             match metric_data {
-                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => "gauge",
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => Ok("gauge"),
                 opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
                     if sum.is_monotonic() {
-                        "counter"
+                        Ok("counter")
                     } else {
-                        "gauge"
+                        Ok("gauge")
                     }
                 }
-                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => "histogram",
-                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => {
-                    unimplemented!()
-                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => Ok("histogram"),
+                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => Err(()),
             }
         }
     }
@@ -111,10 +112,10 @@ fn write_values(
     f: &mut std::fmt::Formatter<'_>,
     temp_buffer: &mut String,
     scope_name: &str,
-    metric: &opentelemetry_sdk::metrics::data::Metric,
+    metric: &opentelemetry_sdk::metrics::data::AggregatedMetrics,
     name: &str,
 ) -> std::fmt::Result {
-    match metric.data() {
+    match metric {
         opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
             match metric_data {
                 opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
@@ -148,13 +149,13 @@ fn write_values(
         opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(metric_data) => {
             match metric_data {
                 opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                    write_gauge(f, &name, scope_name, temp_buffer, gauge)
+                    write_gauge(f, name, scope_name, temp_buffer, gauge)
                 }
                 opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                    write_counter(f, &name, scope_name, temp_buffer, sum)
+                    write_counter(f, name, scope_name, temp_buffer, sum)
                 }
                 opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                    write_histogram(f, &name, scope_name, temp_buffer, histogram)
+                    write_histogram(f, name, scope_name, temp_buffer, histogram)
                 }
                 _ => unimplemented!(),
             }
