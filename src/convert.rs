@@ -34,6 +34,11 @@ impl<'a> Display for ToOpenMetrics<'a> {
                 if !unit.is_empty() {
                     name.push('_');
                     name.push_str(&unit);
+                }
+
+                writeln!(f, "# TYPE {name} {typ}", typ = get_type(metric))?;
+
+                if !unit.is_empty() {
                     writeln!(f, "# UNIT {name} {unit}")?;
                 }
                 if !metric.description().is_empty() {
@@ -41,56 +46,119 @@ impl<'a> Display for ToOpenMetrics<'a> {
                     write_escaped(f, metric.description())?;
                     f.write_char('\n')?;
                 }
-                match metric.data() {
-                    opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
-                        match metric_data {
-                            opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                                write_gauge(f, name, scope_name, &mut temp_buffer, gauge)?;
-                            }
-                            opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                                write_counter(f, name, scope_name, &mut temp_buffer, sum)?;
-                            }
-                            opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                                write_histogram(f, name, scope_name, &mut temp_buffer, histogram)?;
-                            }
-                            // See https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#exponential-histograms
-                            // for exponential histograms
-                            _ => unimplemented!(),
-                        }
-                    }
-                    opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(metric_data) => {
-                        match metric_data {
-                            opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                                write_gauge(f, name, scope_name, &mut temp_buffer, gauge)?;
-                            }
-                            opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                                write_counter(f, name, scope_name, &mut temp_buffer, sum)?;
-                            }
-                            opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                                write_histogram(f, name, scope_name, &mut temp_buffer, histogram)?;
-                            }
-                            _ => unimplemented!(),
-                        }
-                    }
-                    opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(metric_data) => {
-                        match metric_data {
-                            opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                                write_gauge(f, name, scope_name, &mut temp_buffer, gauge)?;
-                            }
-                            opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                                write_counter(f, name, scope_name, &mut temp_buffer, sum)?;
-                            }
-                            opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                                write_histogram(f, name, scope_name, &mut temp_buffer, histogram)?;
-                            }
-                            _ => unimplemented!(),
-                        }
-                    }
-                }
+                write_values(f, &mut temp_buffer, scope_name, metric, &name)?;
             }
         }
         writeln!(f, "# EOF")?;
         Ok(())
+    }
+}
+
+fn get_type(metric: &opentelemetry_sdk::metrics::data::Metric) -> &'static str {
+    match metric.data() {
+        opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
+            match metric_data {
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => "gauge",
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
+                    if sum.is_monotonic() {
+                        "counter"
+                    } else {
+                        "gauge"
+                    }
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => "histogram",
+                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => {
+                    unimplemented!()
+                }
+            }
+        }
+        opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(metric_data) => {
+            match metric_data {
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => "gauge",
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
+                    if sum.is_monotonic() {
+                        "counter"
+                    } else {
+                        "gauge"
+                    }
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => "histogram",
+                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => {
+                    unimplemented!()
+                }
+            }
+        }
+        opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(metric_data) => {
+            match metric_data {
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(_) => "gauge",
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
+                    if sum.is_monotonic() {
+                        "counter"
+                    } else {
+                        "gauge"
+                    }
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(_) => "histogram",
+                opentelemetry_sdk::metrics::data::MetricData::ExponentialHistogram(_) => {
+                    unimplemented!()
+                }
+            }
+        }
+    }
+}
+
+fn write_values(
+    f: &mut std::fmt::Formatter<'_>,
+    temp_buffer: &mut String,
+    scope_name: &str,
+    metric: &opentelemetry_sdk::metrics::data::Metric,
+    name: &str,
+) -> std::fmt::Result {
+    match metric.data() {
+        opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
+            match metric_data {
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
+                    write_gauge(f, name, scope_name, temp_buffer, gauge)
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
+                    write_counter(f, name, scope_name, temp_buffer, sum)
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
+                    write_histogram(f, name, scope_name, temp_buffer, histogram)
+                }
+                // See https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#exponential-histograms
+                // for exponential histograms
+                _ => unimplemented!(),
+            }
+        }
+        opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(metric_data) => {
+            match metric_data {
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
+                    write_gauge(f, name, scope_name, temp_buffer, gauge)
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
+                    write_counter(f, name, scope_name, temp_buffer, sum)
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
+                    write_histogram(f, name, scope_name, temp_buffer, histogram)
+                }
+                _ => unimplemented!(),
+            }
+        }
+        opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(metric_data) => {
+            match metric_data {
+                opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
+                    write_gauge(f, &name, scope_name, temp_buffer, gauge)
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
+                    write_counter(f, &name, scope_name, temp_buffer, sum)
+                }
+                opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
+                    write_histogram(f, &name, scope_name, temp_buffer, histogram)
+                }
+                _ => unimplemented!(),
+            }
+        }
     }
 }
 
@@ -108,19 +176,18 @@ impl<'a> Display for ToOpenMetrics<'a> {
 
 fn write_histogram<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
-    name: String,
+    name: &str,
     scope_name: &str,
     temp_buffer: &mut String,
     histogram: &opentelemetry_sdk::metrics::data::Histogram<T>,
 ) -> std::fmt::Result {
     let scope_name_attrs = &[KeyValue::new("otel_scope_name", scope_name.to_owned())];
-    writeln!(f, "# TYPE {name} histogram")?;
     let ts = to_timestamp(histogram.time());
     let created = to_timestamp(histogram.start_time());
     temp_buffer.clear();
     let attrs = temp_buffer;
     write_attrs(attrs, scope_name_attrs.iter())?;
-    fprint!(f, name, "_created{", attrs, "} ", created, '\n');
+    fprint!(f, name, "_created{", attrs, "} ", created, ' ', ts, '\n');
     assert_eq!(
         histogram.temporality(),
         opentelemetry_sdk::metrics::Temporality::Cumulative,
@@ -160,7 +227,9 @@ fn write_histogram<T: FastDisplay + Copy>(
         if !attrs.is_empty() {
             attrs.push(',');
         }
+        let mut cumulative_count = 0;
         for (bound, count) in std::iter::zip(point.bounds(), point.bucket_counts()) {
+            cumulative_count += count;
             fprint!(
                 f,
                 name,
@@ -169,7 +238,7 @@ fn write_histogram<T: FastDisplay + Copy>(
                 "le=\"",
                 bound.fast_display(),
                 "\"} ",
-                count.fast_display(),
+                cumulative_count.fast_display(),
                 ' ',
                 ts,
                 '\n'
@@ -186,7 +255,7 @@ fn write_histogram<T: FastDisplay + Copy>(
 
 fn write_counter<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
-    name: String,
+    name: &str,
     scope_name: &str,
     temp_buffer: &mut String,
     sum: &opentelemetry_sdk::metrics::data::Sum<T>,
@@ -199,7 +268,6 @@ fn write_counter<T: FastDisplay + Copy>(
         "Only cumulative sums are supported"
     );
     if sum.is_monotonic() {
-        writeln!(f, "# TYPE {name} counter")?;
         let ts = to_timestamp(sum.time());
         for point in sum.data_points() {
             attrs.clear();
@@ -212,7 +280,6 @@ fn write_counter<T: FastDisplay + Copy>(
         }
         Ok(())
     } else {
-        writeln!(f, "# TYPE {name} gauge")?;
         let ts = to_timestamp(sum.time());
         for point in sum.data_points() {
             attrs.clear();
@@ -229,14 +296,13 @@ fn write_counter<T: FastDisplay + Copy>(
 
 fn write_gauge<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
-    name: String,
+    name: &str,
     scope_name: &str,
     temp_buffer: &mut String,
     gauge: &opentelemetry_sdk::metrics::data::Gauge<T>,
 ) -> std::fmt::Result {
     let attrs = temp_buffer;
     let scope_name_attrs = &[KeyValue::new("otel_scope_name", scope_name.to_owned())];
-    writeln!(f, "# TYPE {name} gauge")?;
     let ts = to_timestamp(gauge.time());
     for point in gauge.data_points() {
         attrs.clear();

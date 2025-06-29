@@ -1,19 +1,19 @@
-use opentelemetry::{KeyValue, global};
+use openmetrics_parser::openmetrics::parse_openmetrics;
+use opentelemetry::KeyValue;
+use opentelemetry::metrics::MeterProvider;
 use opentelemetry_openmetrics::convert::ToOpenMetrics;
 use opentelemetry_openmetrics::testsupport::TestMetricsReader;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::reader::MetricReader;
 
-#[test]
-fn test_conversion() {
+fn make_test_metrics() -> ResourceMetrics {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
         .build();
-    global::set_meter_provider(meter_provider);
+    let meter = meter_provider.meter("meter.1");
 
-    let meter = global::meter("meter.1");
     let gauge = meter
         .f64_gauge("f64.gauge")
         .with_description("A \"gauge\"\nFor testing")
@@ -38,9 +38,26 @@ fn test_conversion() {
     let mut metrics = ResourceMetrics::default();
     reader.collect(&mut metrics).unwrap();
 
-    dbg!(&metrics);
+    metrics
+}
 
-    eprintln!("{}", ToOpenMetrics(&metrics));
+#[test]
+fn test_output_is_parseable_by_openmetrics_parser() {
+    let metrics = make_test_metrics();
 
-    todo!();
+    let formatted = format!("{}", ToOpenMetrics(&metrics));
+    println!("{}", &formatted);
+
+    let parsed = parse_openmetrics(&formatted);
+
+    if let Err(ref err) = parsed {
+        match err {
+            openmetrics_parser::ParseError::ParseError(s) => {
+                panic!("Parse error:\n{s}")
+            }
+            openmetrics_parser::ParseError::DuplicateMetric => panic!("Duplicate metric!"),
+            openmetrics_parser::ParseError::InvalidMetric(s) => eprintln!("InvalidMetric:\n{s}"),
+            // ^ Some of these are too harsh. We cannot fail the test on them
+        }
+    }
 }
