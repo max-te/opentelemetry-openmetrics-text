@@ -129,29 +129,16 @@ fn write_histogram<T: FastDisplay + Copy>(
         attrs.clear();
         write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
 
-        fprint!(
+        writeln!(
             f,
-            name,
-            "_count{",
-            attrs,
-            "} ",
-            point.count().fast_display(),
-            ' ',
-            ts,
-            '\n'
-        );
-
-        fprint!(
+            "{name}_count{{{attrs}}} {value} {ts}",
+            value = point.count().fast_display(),
+        )?;
+        writeln!(
             f,
-            name,
-            "_sum{",
-            attrs,
-            "} ",
-            point.sum().fast_display(),
-            ' ',
-            ts,
-            '\n'
-        );
+            "{name}_sum{{{attrs}}} {value} {ts}",
+            value = point.sum().fast_display(),
+        )?;
 
         // Non-compliant but useful:
         if let Some(min) = point.min() {
