@@ -167,7 +167,7 @@ fn write_histogram<T: FastDisplay + Copy>(
                 attrs,
                 "le=\"",
                 bound.fast_display(),
-                "\"}",
+                "\"} ",
                 count.fast_display(),
                 ' ',
                 ts,
