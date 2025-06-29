@@ -24,8 +24,8 @@ impl<'a> Display for ToOpenMetrics<'a> {
         // let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
 
         let mut temp_buffer = String::with_capacity(256);
+        write_otel_scope_info(f, self.0)?;
         for scope in self.0.scope_metrics() {
-            // write_scope_info(f, scope)?;
             let scope_name = scope.scope().name();
 
             for metric in scope.metrics() {
@@ -57,6 +57,28 @@ impl<'a> Display for ToOpenMetrics<'a> {
         writeln!(f, "# EOF")?;
         Ok(())
     }
+}
+
+fn write_otel_scope_info(
+    f: &mut std::fmt::Formatter<'_>,
+    metrics: &'_ ResourceMetrics,
+) -> std::fmt::Result {
+    // https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#instrumentation-scope-1
+    f.write_str("# TYPE otel_scope_info info\n")?;
+
+    for scope in metrics.scope_metrics() {
+        let otel_attrs = &[
+            KeyValue::new("otel_scope_name", scope.scope().name().to_owned()),
+            KeyValue::new(
+                "otel_scope_version",
+                scope.scope().version().unwrap_or_default().to_owned(),
+            ),
+        ];
+        f.write_str("otel_scope_info{")?;
+        write_attrs(f, otel_attrs.iter().chain(scope.scope().attributes()))?;
+        f.write_str("} 1\n")?;
+    }
+    Ok(())
 }
 
 fn get_type(
@@ -162,18 +184,6 @@ fn write_values(
         }
     }
 }
-
-// fn write_scope_info(
-//     f: &mut std::fmt::Formatter<'_>,
-//     scope: &opentelemetry_sdk::metrics::data::ScopeMetrics,
-// ) -> Result<(), std::fmt::Error> {
-//     // https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#instrumentation-scope-1
-//     let scope_name = sanitize_name(scope.scope().name());
-//     let scope_attrs = print_attrs(scope.scope().attributes());
-//     writeln!(f, "# TYPE {scope_name} info")?;
-//     writeln!(f, "{scope_name}_info{{{}}} 1", scope_attrs)?;
-//     Ok(())
-// }
 
 fn write_histogram<T: FastDisplay + Copy>(
     f: &mut std::fmt::Formatter<'_>,
