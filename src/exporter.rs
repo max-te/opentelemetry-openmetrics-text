@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +7,7 @@ use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::convert::ToOpenMetrics;
+use crate::convert::WriteOpenMetrics;
 
 #[derive(Debug, Clone)]
 pub struct OpenMetricsExporter {
@@ -43,9 +42,11 @@ impl PushMetricExporter for OpenMetricsExporter {
         let mut backbuffer = self.backbuffer.lock().await;
         let mut nextbuffer = backbuffer.take().unwrap_or_default();
         nextbuffer.clear();
-        write!(nextbuffer, "{}", ToOpenMetrics(metrics)).map_err(|err| {
-            OTelSdkError::InternalFailure(format!("Failed to write to buffer: {err}"))
-        })?;
+        metrics
+            .write_as_openmetrics(&mut nextbuffer)
+            .map_err(|err| {
+                OTelSdkError::InternalFailure(format!("Failed to write to buffer: {err}"))
+            })?;
 
         let mut buffer = self.buffer.write().await;
         let oldbuffer = buffer.replace(nextbuffer);

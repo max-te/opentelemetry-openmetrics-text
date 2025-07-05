@@ -4,13 +4,13 @@ version = "0.30.0"
 edition = "2024"
 
 [dependencies]
-itoa = "1.0.15"
-memchr = "2.7.5"
+memchr = { version = "2.7.5", optional = true }
+itoa = { version = "1.0.15", optional = true }
 opentelemetry = { version = "*", default-features = false }
 opentelemetry_sdk = { version = "0.30.0", default-features = false, features = [
     "metrics",
 ] }
-ryu = "1.0.20"
+ryu = { version = "1.0.20", optional = true }
 tokio = { version = "1.45.1", default-features = false, features = [
     "sync",
 ], optional = true }
@@ -19,18 +19,19 @@ tracing = { version = "0.1.41", optional = true }
 [features]
 exporter = ["dep:tokio"]
 tracing = ["dep:tracing"]
-testing = ["opentelemetry_sdk/experimental_metrics_custom_reader"]
-default = ["tracing", "exporter", "testing"]
+histogram-min-max = []
+otel_scope_info = []
+fast = ["dep:itoa", "dep:ryu", "dep:memchr"]
+default = ["tracing", "exporter", "otel_scope_info", "fast"]
 
 [dev-dependencies]
-criterion = "0.6"
+opentelemetry_sdk = { version = "*", features = [
+    "experimental_metrics_custom_reader",
+] }
 openmetrics-parser = "0.4.4"
 tango-bench = "0.6"
+insta = { version = "1.43.1", features = ["yaml"] }
 
 [[bench]]
 name = "converter"
-harness = false
-
-[[bench]]
-name = "criterion"
 harness = false
