@@ -1,10 +1,10 @@
-use std::borrow::Cow;
 use std::fmt::{Display, Write};
 use std::hash::{DefaultHasher, Hasher};
 
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
+use unit::get_unit_suffixes;
 
 pub const MIME_TYPE: &str = "application/openmetrics-text; version=1.0.0; charset=utf-8";
 pub trait WriteOpenMetrics {
@@ -42,15 +42,15 @@ impl WriteOpenMetrics for ResourceMetrics {
                 };
                 let mut name = String::with_capacity(metric.name().len());
                 write_sanitized_name(&mut name, metric.name())?;
-                let unit = convert_unit(metric.unit());
-                if !unit.is_empty() {
+                let unit = get_unit_suffixes(metric.unit());
+                if let Some(ref unit) = unit {
                     name.push('_');
-                    name.push_str(&unit);
+                    name.push_str(unit);
                 }
 
                 writeln!(f, "# TYPE {name} {typ}")?;
 
-                if !unit.is_empty() {
+                if let Some(unit) = unit {
                     writeln!(f, "# UNIT {name} {unit}")?;
                 }
                 if !metric.description().is_empty() {
@@ -439,26 +439,113 @@ fn write_sanitized_name(f: &mut impl Write, name: &str) -> std::fmt::Result {
     Ok(())
 }
 
-fn convert_unit(short_unit: &str) -> Cow<'static, str> {
-    // Reference https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#metric-metadata-1
-    match short_unit {
-        "" => Cow::Borrowed(""),
-        "s" => Cow::Borrowed("seconds"),
-        "ms" => Cow::Borrowed("milliseconds"),
-        "us" => Cow::Borrowed("microseconds"),
-        "ns" => Cow::Borrowed("nanoseconds"),
-        "1" => Cow::Borrowed("ratio"),
-        "By" => Cow::Borrowed("bytes"),
-        // TODO: Add more units
-        // TODO: Rewrite `/` to `_per_`
-        _ => Cow::Owned({
-            let mut unit = String::new();
-            write_sanitized_name(&mut unit, short_unit).unwrap();
-            unit
-        }),
+mod unit {
+    /*!
+     * OTEL style short unit to Prometheus style long unit conversion
+     *
+     * Extracted from the opentelemetry-prometheus crate (https://github.com/open-telemetry/opentelemetry-rust/blob/eac368a7e4addbee3b68c27a0eafae59928ad4c7/opentelemetry-prometheus/src/utils.rs)
+     * Licensed under the Apache-2.0 License, Copyright 2025 The opentelemetry-rust Authors
+     */
+
+    use std::borrow::Cow;
+
+    const NON_APPLICABLE_ON_PER_UNIT: [&str; 8] = ["1", "d", "h", "min", "s", "ms", "us", "ns"];
+
+    pub(crate) fn get_unit_suffixes(unit: &str) -> Option<Cow<'static, str>> {
+        // no unit return early
+        if unit.is_empty() {
+            return None;
+        }
+
+        // direct match with known units
+        if let Some(matched) = get_prom_units(unit) {
+            return Some(Cow::Borrowed(matched));
+        }
+
+        // converting foo/bar to foo_per_bar
+        // split the string by the first '/'
+        // if the first part is empty, we just return the second part if it's a match with known per unit
+        // e.g
+        // "test/y" => "per_year"
+        // "km/s" => "kilometers_per_second"
+        if let Some((first, second)) = unit.split_once('/') {
+            return match (
+                NON_APPLICABLE_ON_PER_UNIT.contains(&first),
+                get_prom_units(first),
+                get_prom_per_unit(second),
+            ) {
+                (true, _, Some(second_part)) | (false, None, Some(second_part)) => {
+                    Some(Cow::Owned(format!("per_{second_part}")))
+                }
+                (false, Some(first_part), Some(second_part)) => {
+                    Some(Cow::Owned(format!("{first_part}_per_{second_part}")))
+                }
+                _ => None,
+            };
+        }
+
+        // Unmatched units and annotations are ignored
+        // e.g. "{request}"
+        None
+    }
+
+    fn get_prom_units(unit: &str) -> Option<&'static str> {
+        match unit {
+            // Time
+            "d" => Some("days"),
+            "h" => Some("hours"),
+            "min" => Some("minutes"),
+            "s" => Some("seconds"),
+            "ms" => Some("milliseconds"),
+            "us" => Some("microseconds"),
+            "ns" => Some("nanoseconds"),
+
+            // Bytes
+            "By" => Some("bytes"),
+            "KiBy" => Some("kibibytes"),
+            "MiBy" => Some("mebibytes"),
+            "GiBy" => Some("gibibytes"),
+            "TiBy" => Some("tibibytes"),
+            "KBy" => Some("kilobytes"),
+            "MBy" => Some("megabytes"),
+            "GBy" => Some("gigabytes"),
+            "TBy" => Some("terabytes"),
+            "B" => Some("bytes"),
+            "KB" => Some("kilobytes"),
+            "MB" => Some("megabytes"),
+            "GB" => Some("gigabytes"),
+            "TB" => Some("terabytes"),
+
+            // SI
+            "m" => Some("meters"),
+            "V" => Some("volts"),
+            "A" => Some("amperes"),
+            "J" => Some("joules"),
+            "W" => Some("watts"),
+            "g" => Some("grams"),
+
+            // Misc
+            "Cel" => Some("celsius"),
+            "Hz" => Some("hertz"),
+            "1" => Some("ratio"),
+            "%" => Some("percent"),
+            _ => None,
+        }
+    }
+
+    fn get_prom_per_unit(unit: &str) -> Option<&'static str> {
+        match unit {
+            "s" => Some("second"),
+            "m" => Some("minute"),
+            "h" => Some("hour"),
+            "d" => Some("day"),
+            "w" => Some("week"),
+            "mo" => Some("month"),
+            "y" => Some("year"),
+            _ => None,
+        }
     }
 }
-
 trait FastDisplay {
     fn fast_display(&self) -> impl Display + Copy + use<Self>;
 }

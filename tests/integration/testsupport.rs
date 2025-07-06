@@ -67,10 +67,7 @@ pub fn make_test_metrics() -> ResourceMetrics {
     gauge.record(4.22, &[KeyValue::new("kk", "v1")]);
     gauge.record(4.23, &[KeyValue::new("kk", "v2")]);
 
-    let counter = meter
-        .u64_counter("u64.counter")
-        .with_unit("seconds")
-        .build();
+    let counter = meter.u64_counter("u64.counter").with_unit("s").build();
     counter.add(125, &[]);
 
     let hist = meter.f64_histogram("histo").build();
@@ -101,10 +98,7 @@ pub fn make_large_test_metrics() -> ResourceMetrics {
         gauge.record(4.22, &[KeyValue::new("foo.bar", format!("a{i}"))]);
     }
 
-    let counter = meter
-        .u64_counter("u64.counter")
-        .with_unit("seconds")
-        .build();
+    let counter = meter.u64_counter("u64.counter").with_unit("s").build();
     for i in 0..1000 {
         counter.add(422 * i, &[KeyValue::new("high-low", format!("v\n{i}"))]);
     }
