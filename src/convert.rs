@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Write};
+use std::hash::{DefaultHasher, Hasher};
 
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
+use opentelemetry_sdk::metrics::data::ScopeMetrics;
 
 pub const MIME_TYPE: &str = "application/openmetrics-text; version=1.0.0; charset=utf-8";
 pub trait WriteOpenMetrics {
@@ -19,12 +21,20 @@ impl WriteOpenMetrics for ResourceMetrics {
         // TODO: let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
 
         let mut temp_buffer = String::with_capacity(256);
+
+        let mut scopes: Vec<&ScopeMetrics> = self.scope_metrics().collect();
+        scopes.sort_unstable_by_key(|s| s.scope().name());
+
         #[cfg(feature = "otel_scope_info")]
-        write_otel_scope_info(f, self)?;
-        for scope in self.scope_metrics() {
+        write_otel_scope_info(f, &scopes)?;
+
+        for scope in scopes {
             let scope_name = scope.scope().name();
 
-            for metric in scope.metrics() {
+            let mut metrics: Vec<_> = scope.metrics().collect();
+            metrics.sort_unstable_by_key(|met| met.name());
+
+            for metric in metrics {
                 let Ok(typ) = get_type(metric.data()) else {
                     #[cfg(feature = "tracing")]
                     tracing::warn!("Unsupported metric type {metric:?}");
@@ -57,11 +67,11 @@ impl WriteOpenMetrics for ResourceMetrics {
 }
 
 #[cfg(feature = "otel_scope_info")]
-fn write_otel_scope_info(f: &mut impl Write, metrics: &'_ ResourceMetrics) -> std::fmt::Result {
+fn write_otel_scope_info(f: &mut impl Write, metrics: &'_ Vec<&ScopeMetrics>) -> std::fmt::Result {
     // Reference https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#instrumentation-scope-1
     f.write_str("# TYPE otel_scope info\n")?;
 
-    for scope in metrics.scope_metrics() {
+    for scope in metrics {
         let otel_attrs = &[
             KeyValue::new("otel_scope_name", scope.scope().name().to_owned()),
             KeyValue::new(
@@ -203,7 +213,11 @@ fn write_histogram<T: FastDisplay + Copy>(
         opentelemetry_sdk::metrics::Temporality::Cumulative,
         "Only cumulative Histograms are supported"
     );
-    for point in histogram.data_points() {
+
+    let mut points: Vec<_> = histogram.data_points().collect();
+    points.sort_by_cached_key(|p| hash_attrs(p.attributes()));
+
+    for point in points {
         attrs.clear();
         write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
 
@@ -288,9 +302,14 @@ fn write_counter<T: FastDisplay + Copy>(
         opentelemetry_sdk::metrics::Temporality::Cumulative,
         "Only cumulative sums are supported"
     );
+
+    let mut points: Vec<_> = sum.data_points().collect();
+    points.sort_by_cached_key(|p| hash_attrs(p.attributes()));
+
+    let ts = to_timestamp(sum.time());
+
     if sum.is_monotonic() {
-        let ts = to_timestamp(sum.time());
-        for point in sum.data_points() {
+        for point in points {
             attrs.clear();
             write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
             writeln!(
@@ -301,8 +320,7 @@ fn write_counter<T: FastDisplay + Copy>(
         }
         Ok(())
     } else {
-        let ts = to_timestamp(sum.time());
-        for point in sum.data_points() {
+        for point in points {
             attrs.clear();
             write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
             writeln!(
@@ -325,7 +343,9 @@ fn write_gauge<T: FastDisplay + Copy>(
     let attrs = temp_buffer;
     let scope_name_attrs = make_scope_name_attrs(scope_name);
     let ts = to_timestamp(gauge.time());
-    for point in gauge.data_points() {
+    let mut points: Vec<_> = gauge.data_points().collect();
+    points.sort_by_cached_key(|p| hash_attrs(p.attributes()));
+    for point in points {
         attrs.clear();
         write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
         writeln!(
@@ -345,11 +365,26 @@ fn to_timestamp(time: std::time::SystemTime) -> impl Display {
     ts.fast_display()
 }
 
+fn hash_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> u64 {
+    let mut hash = 0;
+    for kv in attrs {
+        let mut hasher = DefaultHasher::default();
+        hasher.write(kv.key.as_str().as_bytes());
+        hasher.write(kv.value.as_str().as_bytes());
+        hash ^= hasher.finish(); // XOR to be order-invariant
+    }
+    hash
+}
+
 fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>>(
     f: &mut impl std::fmt::Write,
     attrs: I,
 ) -> std::fmt::Result {
     let mut first = true;
+
+    let mut attrs: Vec<_> = attrs.collect();
+    attrs.sort_unstable_by_key(|attr| &attr.key);
+
     for attr in attrs {
         if !first {
             f.write_char(',')?;

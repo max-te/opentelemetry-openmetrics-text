@@ -15,7 +15,7 @@ fn matches_snapshot() {
         .as_secs()
         .to_string();
     let formatted = metrics.to_openmetrics_string().unwrap();
-    let mut lines = formatted
+    let redacted = formatted
         .lines()
         .map(|line| {
             line.split_whitespace()
@@ -23,8 +23,7 @@ fn matches_snapshot() {
                 .reduce(|acc, e| format!("{acc} {e}"))
                 .unwrap_or_default()
         })
-        .collect::<Vec<String>>();
-    lines.sort();
-    let sorted = lines.join("\n");
-    assert_snapshot!(sorted);
+        .collect::<Vec<String>>()
+        .join("\n");
+    assert_snapshot!(redacted);
 }
