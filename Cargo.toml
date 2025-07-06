@@ -30,7 +30,7 @@ opentelemetry_sdk = { version = "*", features = [
 ] }
 openmetrics-parser = "0.4.4"
 tango-bench = "0.6"
-insta = { version = "1.43.1", features = ["yaml"] }
+insta = { version = "1.43.1" }
 
 [[bench]]
 name = "converter"
