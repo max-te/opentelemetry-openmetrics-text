@@ -2,6 +2,8 @@
 name = "opentelemetry-openmetrics"
 version = "0.30.0"
 edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/max-te/opentelemetry-openmetrics-text/"
 
 [dependencies]
 memchr = { version = "2.7.5", optional = true }
