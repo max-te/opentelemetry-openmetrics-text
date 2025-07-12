@@ -1,5 +1,7 @@
 use std::fmt::Write;
+use std::time::UNIX_EPOCH;
 
+use insta::assert_snapshot;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
 
@@ -7,7 +9,7 @@ use super::*;
 
 #[path = "../../tests/integration/testsupport.rs"]
 mod testsupport;
-use testsupport::make_test_metrics;
+use testsupport::*;
 
 #[test]
 fn test_write_sanitized_name() {
@@ -196,120 +198,80 @@ fn test_write_values() {
 
 #[test]
 fn test_write_gauge() {
-    let resource_metrics = make_test_metrics();
-    let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
-    let mut test_did_something = false;
+    let metric = make_f64_gauge_metric(
+        vec![
+            (4.2, vec![KeyValue::new("kk", "v1")]),
+            (4.23, vec![KeyValue::new("kk", "v2")])
+        ],
+    );
+    let ts = metric.time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
 
-    for scope in scopes {
-        let scope_name = scope.scope().name();
-        for metric in scope.metrics() {
-            if let Ok("gauge") = get_type(metric.data()) {
-                if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(data) =
-                    metric.data()
-                {
-                    if let opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) = data {
-                        let mut output = String::new();
-                        let mut temp_buffer = String::from("staledata");
+    let mut output = String::new();
+    let mut temp_buffer = String::from("staledata");
 
-                        let result = write_gauge(
-                            &mut output,
-                            metric.name(),
-                            scope_name,
-                            &mut temp_buffer,
-                            gauge,
-                        );
+    let result = write_gauge(
+        &mut output,
+        "mygauge",
+        "myscope",
+        &mut temp_buffer,
+        &metric,
+    );
+    let output = output.replace(&ts, "<TIMESTAMP>");
 
-                        assert!(result.is_ok());
-                        assert!(output.contains(metric.name()));
-                        assert!(output.contains("{"));
-                        assert!(output.contains("}"));
-                        assert!(output.contains(" "));
-                        test_did_something = true;
-                    }
-                }
-            }
-        }
-    }
-    assert!(test_did_something);
+    assert!(result.is_ok());
+    assert_snapshot!(output);
 }
 
 #[test]
 fn test_write_counter() {
-    let resource_metrics = make_test_metrics();
-    let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
-    let mut test_did_something = false;
+    let metric = make_u64_counter_metric(
+        vec![(125, vec![KeyValue::new("kk", "v1")])],
+    );
+    let ts = metric.time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
 
-    for scope in scopes {
-        let scope_name = scope.scope().name();
+    let mut output = String::new();
+    let mut temp_buffer = String::from("staledata");
 
-        for metric in scope.metrics() {
-            if let Ok("counter") = get_type(metric.data()) {
-                if let opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(data) =
-                    metric.data()
-                {
-                    if let opentelemetry_sdk::metrics::data::MetricData::Sum(sum) = data {
-                        let mut output = String::new();
-                        let mut temp_buffer = String::from("staledata");
+    let result = write_counter(
+        &mut output,
+        "mycounter",
+        "myscope",
+        &mut temp_buffer,
+        &metric,
+    );
+    let output = output.replace(&ts, "<TIMESTAMP>");
 
-                        let result = write_counter(
-                            &mut output,
-                            metric.name(),
-                            scope_name,
-                            &mut temp_buffer,
-                            sum,
-                        );
-
-                        assert!(result.is_ok());
-                        assert!(output.contains(metric.name()));
-                        assert!(output.contains(" 125"));
-                        test_did_something = true;
-                    }
-                }
-            }
-        }
-    }
-    assert!(test_did_something);
+    assert!(result.is_ok());
+    assert_snapshot!(output);
 }
 
 #[test]
 fn test_write_histogram() {
-    let resource_metrics = make_test_metrics();
-    let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
-    let mut test_did_something = false;
+    let metric = make_f64_histogram_metric(
+        vec![
+            (125.0, vec![KeyValue::new("kk", "v1")]),
+            (125.0, vec![KeyValue::new("kk", "v2")]),
+            (25.0, vec![KeyValue::new("kk", "v1")]),
+            (0.0, vec![KeyValue::new("kk", "v1")]),
+            (25.0, vec![KeyValue::new("kk", "v2")]),
+        ],
+    );
+    let ts = metric.time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
+    let start_ts = metric.start_time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
 
-    for scope in scopes {
-        let scope_name = scope.scope().name();
+    let mut output = String::new();
+    let mut temp_buffer = String::from("staledata");
 
-        for metric in scope.metrics() {
-            if let Ok("histogram") = get_type(metric.data()) {
-                if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(data) =
-                    metric.data()
-                {
-                    if let opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) = data
-                    {
-                        let mut output = String::new();
-                        let mut temp_buffer = String::from("staledata");
+    let result = write_histogram(
+        &mut output,
+        "myhistogram",
+        "myscope",
+        &mut temp_buffer,
+        &metric,
+    );
+    let output = output.replace(&ts, "<TIMESTAMP>");
+    let output = output.replace(&start_ts, "<START_TIMESTAMP>");
 
-                        let result = write_histogram(
-                            &mut output,
-                            metric.name(),
-                            scope_name,
-                            &mut temp_buffer,
-                            histogram,
-                        );
-
-                        assert!(result.is_ok());
-
-                        assert!(output.contains(metric.name()));
-                        assert!(output.contains("_count"));
-                        assert!(output.contains("_sum"));
-                        assert!(output.contains("_bucket"));
-                        assert!(output.contains("le="));
-                        test_did_something = true;
-                    }
-                }
-            }
-        }
-    }
-    assert!(test_did_something);
+    assert!(result.is_ok());
+    assert_snapshot!(output);
 }

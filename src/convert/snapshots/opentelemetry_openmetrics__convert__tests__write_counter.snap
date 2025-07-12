@@ -1,0 +1,5 @@
+---
+source: src/convert/tests.rs
+expression: output
+---
+mycounter_total{kk="v1",otel_scope_name="myscope"} 125 <TIMESTAMP>
