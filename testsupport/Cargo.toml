@@ -1,0 +1,9 @@
+[package]
+name = "testsupport"
+edition = "2024"
+
+[dependencies]
+opentelemetry.workspace = true
+opentelemetry_sdk = { workspace = true, features = [
+    "experimental_metrics_custom_reader",
+] }

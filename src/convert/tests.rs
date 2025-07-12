@@ -4,12 +4,10 @@ use std::time::UNIX_EPOCH;
 use insta::assert_snapshot;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
+use testsupport::metric_data::{make_f64_gauge_metric, make_u64_counter_metric, make_f64_histogram_metric};
+use testsupport::resource_metrics::make_test_metrics;
 
 use super::*;
-
-#[path = "../../tests/integration/testsupport.rs"]
-mod testsupport;
-use testsupport::*;
 
 #[test]
 fn test_write_sanitized_name() {
@@ -138,7 +136,7 @@ fn test_to_timestamp() {
 #[cfg(feature = "otel_scope_info")]
 #[test]
 fn test_write_otel_scope_info() {
-    let resource_metrics = make_test_metrics().0;
+    let resource_metrics = make_test_metrics();
     let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
 
     let mut output = String::new();
@@ -151,7 +149,7 @@ fn test_write_otel_scope_info() {
 
 #[test]
 fn test_get_type() {
-    let resource_metrics = make_test_metrics().0;
+    let resource_metrics = make_test_metrics();
     let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
 
     for scope in scopes {
@@ -172,7 +170,7 @@ fn test_get_type() {
 
 #[test]
 fn test_write_values() {
-    let resource_metrics = make_test_metrics().0;
+    let resource_metrics = make_test_metrics();
     let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
 
     for scope in scopes {

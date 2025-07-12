@@ -1,12 +1,9 @@
 use std::hint::black_box;
 use std::rc::Rc;
 
-#[path = "../tests/integration/testsupport.rs"]
-mod testsupport;
-
 use opentelemetry_openmetrics::convert::WriteOpenMetrics;
 use tango_bench::{IntoBenchmarks, benchmark_fn, tango_benchmarks, tango_main};
-use testsupport::make_large_test_metrics;
+use testsupport::resource_metrics::make_large_test_metrics;
 
 pub fn benchmarks() -> impl IntoBenchmarks {
     let metrics = Rc::new(make_large_test_metrics());

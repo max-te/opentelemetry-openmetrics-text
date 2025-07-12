@@ -1,11 +1,11 @@
 use openmetrics_parser::openmetrics::parse_openmetrics;
 use opentelemetry_openmetrics::convert::WriteOpenMetrics;
 
-use crate::testsupport::make_test_metrics;
+use testsupport::resource_metrics::make_test_metrics;
 
 #[test]
 pub fn test_output_is_parseable_by_openmetrics_parser() {
-    let metrics = make_test_metrics().0;
+    let metrics = make_test_metrics();
 
     let formatted = metrics.to_openmetrics_string().unwrap();
     println!("{}", &formatted);
