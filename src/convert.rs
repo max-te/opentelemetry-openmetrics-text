@@ -6,6 +6,9 @@ use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use unit::get_unit_suffixes;
 
+#[cfg(test)]
+mod tests;
+
 pub const MIME_TYPE: &str = "application/openmetrics-text; version=1.0.0; charset=utf-8";
 pub trait WriteOpenMetrics {
     fn write_as_openmetrics(&self, f: &mut impl Write) -> std::fmt::Result;
@@ -426,14 +429,21 @@ fn write_escaped(f: &mut impl Write, value: &str) -> std::fmt::Result {
 }
 
 fn write_sanitized_name(f: &mut impl Write, name: &str) -> std::fmt::Result {
-    // Reference https://github.com/ope n-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#metric-metadata-1
-    // TODO: May not start with a number
-    // TODO: No consecutive underscores
+    // Reference https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#metric-metadata-1
+    let mut last_is_underscore = false;
+    if name.starts_with(|c: char| c.is_ascii_digit()) {
+        f.write_char('_')?;
+        last_is_underscore = true;
+    }
     for c in name.chars() {
         if c.is_ascii_alphanumeric() || c == ':' {
             f.write_char(c)?;
+            last_is_underscore = false;
         } else {
-            f.write_char('_')?;
+            if !last_is_underscore {
+                f.write_char('_')?;
+            }
+            last_is_underscore = true;
         }
     }
     Ok(())
