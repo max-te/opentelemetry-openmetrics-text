@@ -127,9 +127,6 @@ fn test_to_timestamp() {
     let timestamp = to_timestamp(time);
     let mut output = String::new();
     write!(output, "{}", timestamp).unwrap();
-    #[cfg(feature = "fast")]
-    assert_eq!(output, "1625097600.0");
-    #[cfg(not(feature = "fast"))]
     assert_eq!(output, "1625097600");
 }
 

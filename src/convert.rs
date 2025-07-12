@@ -5,6 +5,7 @@ use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use unit::get_unit_suffixes;
+use crate::fast_display::FastDisplay;
 
 #[cfg(test)]
 mod tests;
@@ -553,83 +554,6 @@ mod unit {
             "mo" => Some("month"),
             "y" => Some("year"),
             _ => None,
-        }
-    }
-}
-trait FastDisplay {
-    fn fast_display(&self) -> impl Display + Copy + use<Self>;
-}
-
-#[cfg(feature = "fast")]
-mod fast_impl_with {
-    use super::FastDisplay;
-    use std::fmt::Display;
-
-    #[derive(Copy, Clone)]
-    struct RyuDisplay<N: ryu::Float>(N);
-
-    impl<N: ryu::Float> Display for RyuDisplay<N> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let mut buffer = ryu::Buffer::new();
-            let formatted = buffer.format(self.0);
-            f.write_str(formatted)
-        }
-    }
-
-    impl FastDisplay for f64 {
-        #[inline]
-        fn fast_display(&self) -> impl Display + Copy + use<> {
-            RyuDisplay(*self)
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    struct ItoaDisplay<N: itoa::Integer>(N);
-
-    impl<N: itoa::Integer> Display for ItoaDisplay<N> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let mut buffer = itoa::Buffer::new();
-            let formatted = buffer.format(self.0);
-            f.write_str(formatted)
-        }
-    }
-
-    impl FastDisplay for u64 {
-        #[inline]
-        fn fast_display(&self) -> impl Display + Copy + use<> {
-            ItoaDisplay(*self)
-        }
-    }
-
-    impl FastDisplay for i64 {
-        #[inline]
-        fn fast_display(&self) -> impl Display + Copy + use<> {
-            ItoaDisplay(*self)
-        }
-    }
-}
-#[cfg(not(feature = "fast"))]
-mod fast_impl_without {
-    use super::FastDisplay;
-    use std::fmt::Display;
-
-    impl FastDisplay for f64 {
-        #[inline]
-        fn fast_display(&self) -> impl Display + Copy + use<> {
-            *self
-        }
-    }
-    impl FastDisplay for u64 {
-        #[inline]
-        fn fast_display(&self) -> impl Display + Copy + use<> {
-            *self
-        }
-    }
-
-    impl FastDisplay for i64 {
-        #[inline]
-        fn fast_display(&self) -> impl Display + Copy + use<> {
-            *self
         }
     }
 }
