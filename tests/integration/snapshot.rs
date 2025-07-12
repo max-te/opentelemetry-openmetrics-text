@@ -1,29 +1,17 @@
 use std::time::SystemTime;
 
 use insta::assert_snapshot;
-use opentelemetry::time::now;
 use opentelemetry_openmetrics::convert::WriteOpenMetrics;
 
 use crate::testsupport::make_test_metrics;
 
 #[test]
 fn matches_snapshot() {
-    let metrics = make_test_metrics();
-    let time = now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        .to_string();
-    let formatted = metrics.to_openmetrics_string().unwrap();
-    let redacted = formatted
-        .lines()
-        .map(|line| {
-            line.split_whitespace()
-                .map(|t| String::from(if t.starts_with(&time) { "NOW.sthg" } else { t }))
-                .reduce(|acc, e| format!("{acc} {e}"))
-                .unwrap_or_default()
-        })
-        .collect::<Vec<String>>()
-        .join("\n");
-    assert_snapshot!(redacted);
+    let (metrics, erasable_timestamps) = make_test_metrics();
+    let mut formatted = metrics.to_openmetrics_string().unwrap();
+    for (i, ts) in erasable_timestamps.iter().enumerate() {
+        let ts = ts.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64().to_string();
+        formatted = formatted.replace(&ts, &format!("<TIMESTAMP_{}>", i));
+    }
+    assert_snapshot!(formatted);
 }

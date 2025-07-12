@@ -5,7 +5,7 @@ use crate::testsupport::make_test_metrics;
 
 #[test]
 pub fn test_output_is_parseable_by_openmetrics_parser() {
-    let metrics = make_test_metrics();
+    let metrics = make_test_metrics().0;
 
     let formatted = metrics.to_openmetrics_string().unwrap();
     println!("{}", &formatted);

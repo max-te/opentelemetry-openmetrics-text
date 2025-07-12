@@ -138,7 +138,7 @@ fn test_to_timestamp() {
 #[cfg(feature = "otel_scope_info")]
 #[test]
 fn test_write_otel_scope_info() {
-    let resource_metrics = make_test_metrics();
+    let resource_metrics = make_test_metrics().0;
     let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
 
     let mut output = String::new();
@@ -151,7 +151,7 @@ fn test_write_otel_scope_info() {
 
 #[test]
 fn test_get_type() {
-    let resource_metrics = make_test_metrics();
+    let resource_metrics = make_test_metrics().0;
     let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
 
     for scope in scopes {
@@ -172,7 +172,7 @@ fn test_get_type() {
 
 #[test]
 fn test_write_values() {
-    let resource_metrics = make_test_metrics();
+    let resource_metrics = make_test_metrics().0;
     let scopes: Vec<&ScopeMetrics> = resource_metrics.scope_metrics().collect();
 
     for scope in scopes {
