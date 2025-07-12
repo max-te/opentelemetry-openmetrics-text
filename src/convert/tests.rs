@@ -53,7 +53,7 @@ fn test_write_escaped() {
 
 #[test]
 fn test_hash_attrs() {
-    let attrs = vec![
+    let attrs = [
         KeyValue::new("key1", "value1"),
         KeyValue::new("key2", "value2"),
     ];
@@ -61,7 +61,7 @@ fn test_hash_attrs() {
     let hash1 = hash_attrs(attrs.iter());
 
     // Same attributes should produce same hash, order does not matter
-    let attrs2 = vec![
+    let attrs2 = [
         KeyValue::new("key2", "value2"),
         KeyValue::new("key1", "value1"),
     ];
@@ -70,7 +70,7 @@ fn test_hash_attrs() {
     assert_eq!(hash1, hash2);
 
     // Different attributes should produce different hash
-    let attrs3 = vec![
+    let attrs3 = [
         KeyValue::new("key1", "value1"),
         KeyValue::new("key2", "different"),
     ];
@@ -82,7 +82,7 @@ fn test_hash_attrs() {
 #[test]
 fn test_write_attrs() {
     let mut output = String::new();
-    let attrs = vec![
+    let attrs = [
         KeyValue::new("key1", "value1"),
         KeyValue::new("key2", "value2"),
     ];
@@ -92,7 +92,7 @@ fn test_write_attrs() {
 
     // Test with attributes containing characters that need escaping
     output.clear();
-    let attrs_with_escapes = vec![
+    let attrs_with_escapes = [
         KeyValue::new("key1", "value\nwith\nnewlines"),
         KeyValue::new("key2", "value\"with\"quotes"),
     ];
@@ -198,24 +198,21 @@ fn test_write_values() {
 
 #[test]
 fn test_write_gauge() {
-    let metric = make_f64_gauge_metric(
-        vec![
-            (4.2, vec![KeyValue::new("kk", "v1")]),
-            (4.23, vec![KeyValue::new("kk", "v2")])
-        ],
-    );
-    let ts = metric.time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
+    let metric = make_f64_gauge_metric(vec![
+        (4.2, vec![KeyValue::new("kk", "v1")]),
+        (4.23, vec![KeyValue::new("kk", "v2")]),
+    ]);
+    let ts = metric
+        .time()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+        .to_string();
 
     let mut output = String::new();
     let mut temp_buffer = String::from("staledata");
 
-    let result = write_gauge(
-        &mut output,
-        "mygauge",
-        "myscope",
-        &mut temp_buffer,
-        &metric,
-    );
+    let result = write_gauge(&mut output, "mygauge", "myscope", &mut temp_buffer, &metric);
     let output = output.replace(&ts, "<TIMESTAMP>");
 
     assert!(result.is_ok());
@@ -224,10 +221,13 @@ fn test_write_gauge() {
 
 #[test]
 fn test_write_counter() {
-    let metric = make_u64_counter_metric(
-        vec![(125, vec![KeyValue::new("kk", "v1")])],
-    );
-    let ts = metric.time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
+    let metric = make_u64_counter_metric(vec![(125, vec![KeyValue::new("kk", "v1")])]);
+    let ts = metric
+        .time()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+        .to_string();
 
     let mut output = String::new();
     let mut temp_buffer = String::from("staledata");
@@ -247,17 +247,25 @@ fn test_write_counter() {
 
 #[test]
 fn test_write_histogram() {
-    let metric = make_f64_histogram_metric(
-        vec![
-            (125.0, vec![KeyValue::new("kk", "v1")]),
-            (125.0, vec![KeyValue::new("kk", "v2")]),
-            (25.0, vec![KeyValue::new("kk", "v1")]),
-            (0.0, vec![KeyValue::new("kk", "v1")]),
-            (25.0, vec![KeyValue::new("kk", "v2")]),
-        ],
-    );
-    let ts = metric.time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
-    let start_ts = metric.start_time().duration_since(UNIX_EPOCH).unwrap().as_secs_f64().to_string();
+    let metric = make_f64_histogram_metric(vec![
+        (125.0, vec![KeyValue::new("kk", "v1")]),
+        (125.0, vec![KeyValue::new("kk", "v2")]),
+        (25.0, vec![KeyValue::new("kk", "v1")]),
+        (0.0, vec![KeyValue::new("kk", "v1")]),
+        (25.0, vec![KeyValue::new("kk", "v2")]),
+    ]);
+    let ts = metric
+        .time()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+        .to_string();
+    let start_ts = metric
+        .start_time()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+        .to_string();
 
     let mut output = String::new();
     let mut temp_buffer = String::from("staledata");

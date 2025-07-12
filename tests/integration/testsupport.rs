@@ -132,7 +132,7 @@ pub fn make_f64_gauge_metric(
     let scope_name = "test_meter";
     let meter = meter_provider.meter(scope_name);
 
-    const MYGAUGE: &'static str = "mygauge";
+    const MYGAUGE: &str = "mygauge";
     let gauge_builder = meter.f64_gauge(MYGAUGE);
     let gauge = gauge_builder.build();
 
@@ -151,10 +151,11 @@ pub fn make_f64_gauge_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYGAUGE {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(data) = metric.data() {
-                        if let opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) = data {
-                            return gauge.clone();
-                        }
+                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(
+                        opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge),
+                    ) = metric.data()
+                    {
+                        return gauge.clone();
                     }
                 }
             }
@@ -163,7 +164,6 @@ pub fn make_f64_gauge_metric(
 
     unreachable!("should have found gauge data")
 }
-
 
 #[allow(dead_code)]
 pub fn make_u64_counter_metric(
@@ -176,7 +176,7 @@ pub fn make_u64_counter_metric(
     let scope_name = "test_meter";
     let meter = meter_provider.meter(scope_name);
 
-    const MYCOUNTER: &'static str = "mycounter";
+    const MYCOUNTER: &str = "mycounter";
     let counter_builder = meter.u64_counter(MYCOUNTER);
     let counter = counter_builder.build();
 
@@ -195,10 +195,11 @@ pub fn make_u64_counter_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYCOUNTER {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(data) = metric.data() {
-                        if let opentelemetry_sdk::metrics::data::MetricData::Sum(sum) = data {
-                            return sum.clone();
-                        }
+                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(
+                        opentelemetry_sdk::metrics::data::MetricData::Sum(sum),
+                    ) = metric.data()
+                    {
+                        return sum.clone();
                     }
                 }
             }
@@ -219,7 +220,7 @@ pub fn make_f64_histogram_metric(
     let scope_name = "test_meter";
     let meter = meter_provider.meter(scope_name);
 
-    const MYHISTOGRAM: &'static str = "myhistogram";
+    const MYHISTOGRAM: &str = "myhistogram";
     let histogram_builder = meter.f64_histogram(MYHISTOGRAM);
     let histogram = histogram_builder.build();
 
@@ -238,10 +239,11 @@ pub fn make_f64_histogram_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYHISTOGRAM {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(data) = metric.data() {
-                        if let opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) = data {
-                            return histogram.clone();
-                        }
+                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(
+                        opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram),
+                    ) = metric.data()
+                    {
+                        return histogram.clone();
                     }
                 }
             }
