@@ -1,9 +1,9 @@
+use crate::reader::TestMetricsReader;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::MeterProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::reader::MetricReader;
-use opentelemetry_sdk::metrics::SdkMeterProvider;
-use crate::reader::TestMetricsReader;
 
 pub fn make_test_metrics() -> ResourceMetrics {
     let reader = TestMetricsReader::default();

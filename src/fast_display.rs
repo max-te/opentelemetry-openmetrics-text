@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-
 pub(crate) trait FastDisplay {
     fn fast_display(&self) -> impl Display + Copy + use<Self>;
 }

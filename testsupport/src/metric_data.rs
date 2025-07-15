@@ -1,8 +1,8 @@
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::MeterProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::reader::MetricReader;
-use opentelemetry_sdk::metrics::{SdkMeterProvider};
 
 use crate::reader::TestMetricsReader;
 
@@ -53,10 +53,19 @@ pub fn make_f64_gauge_metric(
 fn test_make_f64_gauge_metric() {
     let values = &[(2.5, vec![KeyValue::new("key", "value")]), (-3.0, vec![])];
     let gauge = make_f64_gauge_metric(values.to_vec());
-    
+
     assert_eq!(gauge.data_points().count(), values.len());
-    assert_eq!(gauge.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(gauge.data_points().map(|dp| dp.value()).sum::<f64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        gauge
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        gauge.data_points().map(|dp| dp.value()).sum::<f64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }
 
 pub fn make_u64_gauge_metric(
@@ -106,12 +115,20 @@ pub fn make_u64_gauge_metric(
 fn test_make_u64_gauge_metric() {
     let values = &[(2, vec![KeyValue::new("key", "value")]), (3, vec![])];
     let gauge = make_u64_gauge_metric(values.to_vec());
-    
-    assert_eq!(gauge.data_points().count(), values.len());
-    assert_eq!(gauge.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(gauge.data_points().map(|dp| dp.value()).sum::<u64>(), values.iter().map(|v| v.0).sum());
-}
 
+    assert_eq!(gauge.data_points().count(), values.len());
+    assert_eq!(
+        gauge
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        gauge.data_points().map(|dp| dp.value()).sum::<u64>(),
+        values.iter().map(|v| v.0).sum()
+    );
+}
 
 pub fn make_i64_gauge_metric(
     values: Vec<(i64, Vec<KeyValue>)>,
@@ -160,10 +177,19 @@ pub fn make_i64_gauge_metric(
 fn test_make_i64_gauge_metric() {
     let values = &[(2, vec![KeyValue::new("key", "value")]), (-3, vec![])];
     let gauge = make_i64_gauge_metric(values.to_vec());
-    
+
     assert_eq!(gauge.data_points().count(), values.len());
-    assert_eq!(gauge.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(gauge.data_points().map(|dp| dp.value()).sum::<i64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        gauge
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        gauge.data_points().map(|dp| dp.value()).sum::<i64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }
 
 pub fn make_u64_counter_metric(
@@ -213,10 +239,19 @@ pub fn make_u64_counter_metric(
 fn test_make_u64_counter_metric() {
     let values = &[(2, vec![KeyValue::new("key", "value")]), (3, vec![])];
     let counter = make_u64_counter_metric(values.to_vec());
-    
+
     assert_eq!(counter.data_points().count(), values.len());
-    assert_eq!(counter.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(counter.data_points().map(|dp| dp.value()).sum::<u64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        counter
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        counter.data_points().map(|dp| dp.value()).sum::<u64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }
 
 pub fn make_f64_counter_metric(
@@ -266,10 +301,19 @@ pub fn make_f64_counter_metric(
 fn test_make_f64_counter_metric() {
     let values = &[(2.5, vec![KeyValue::new("key", "value")]), (3.0, vec![])];
     let counter = make_f64_counter_metric(values.to_vec());
-    
+
     assert_eq!(counter.data_points().count(), values.len());
-    assert_eq!(counter.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(counter.data_points().map(|dp| dp.value()).sum::<f64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        counter
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        counter.data_points().map(|dp| dp.value()).sum::<f64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }
 
 pub fn make_i64_counter_metric(
@@ -319,10 +363,19 @@ pub fn make_i64_counter_metric(
 fn test_make_i64_counter_metric() {
     let values = &[(2, vec![KeyValue::new("key", "value")]), (-3, vec![])];
     let counter = make_i64_counter_metric(values.to_vec());
-    
+
     assert_eq!(counter.data_points().count(), values.len());
-    assert_eq!(counter.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(counter.data_points().map(|dp| dp.value()).sum::<i64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        counter
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        counter.data_points().map(|dp| dp.value()).sum::<i64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }
 
 pub fn make_f64_histogram_metric(
@@ -372,12 +425,33 @@ pub fn make_f64_histogram_metric(
 fn test_make_f64_histogram_metric() {
     let values = &[(2.5, vec![KeyValue::new("key", "value")]), (3.0, vec![])];
     let histogram = make_f64_histogram_metric(values.to_vec());
-    
+
     assert_eq!(histogram.data_points().count(), values.len());
-    assert_eq!(histogram.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(histogram.data_points().map(|dp| dp.sum()).sum::<f64>(), values.iter().map(|v| v.0).sum());
-    assert_eq!(histogram.data_points().map(|dp| dp.min().unwrap()).sum::<f64>(), values.iter().map(|v| v.0).sum());
-    assert_eq!(histogram.data_points().map(|dp| dp.max().unwrap()).sum::<f64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        histogram
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        histogram.data_points().map(|dp| dp.sum()).sum::<f64>(),
+        values.iter().map(|v| v.0).sum()
+    );
+    assert_eq!(
+        histogram
+            .data_points()
+            .map(|dp| dp.min().unwrap())
+            .sum::<f64>(),
+        values.iter().map(|v| v.0).sum()
+    );
+    assert_eq!(
+        histogram
+            .data_points()
+            .map(|dp| dp.max().unwrap())
+            .sum::<f64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }
 
 pub fn make_u64_histogram_metric(
@@ -427,10 +501,31 @@ pub fn make_u64_histogram_metric(
 fn test_make_u64_histogram_metric() {
     let values = &[(2, vec![KeyValue::new("key", "value")]), (3, vec![])];
     let histogram = make_u64_histogram_metric(values.to_vec());
-    
+
     assert_eq!(histogram.data_points().count(), values.len());
-    assert_eq!(histogram.data_points().map(|dp| dp.attributes().count()).sum::<usize>(), 1);
-    assert_eq!(histogram.data_points().map(|dp| dp.sum()).sum::<u64>(), values.iter().map(|v| v.0).sum());
-    assert_eq!(histogram.data_points().map(|dp| dp.min().unwrap()).sum::<u64>(), values.iter().map(|v| v.0).sum());
-    assert_eq!(histogram.data_points().map(|dp| dp.max().unwrap()).sum::<u64>(), values.iter().map(|v| v.0).sum());
+    assert_eq!(
+        histogram
+            .data_points()
+            .map(|dp| dp.attributes().count())
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        histogram.data_points().map(|dp| dp.sum()).sum::<u64>(),
+        values.iter().map(|v| v.0).sum()
+    );
+    assert_eq!(
+        histogram
+            .data_points()
+            .map(|dp| dp.min().unwrap())
+            .sum::<u64>(),
+        values.iter().map(|v| v.0).sum()
+    );
+    assert_eq!(
+        histogram
+            .data_points()
+            .map(|dp| dp.max().unwrap())
+            .sum::<u64>(),
+        values.iter().map(|v| v.0).sum()
+    );
 }

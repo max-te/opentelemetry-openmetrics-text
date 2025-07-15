@@ -1,11 +1,11 @@
 use std::fmt::{Display, Write};
 use std::hash::{DefaultHasher, Hasher};
 
+use crate::fast_display::FastDisplay;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::data::ScopeMetrics;
 use unit::get_unit_suffixes;
-use crate::fast_display::FastDisplay;
 
 #[cfg(test)]
 mod tests;
