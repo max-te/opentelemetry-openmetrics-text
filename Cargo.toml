@@ -39,6 +39,7 @@ testsupport.workspace = true
 openmetrics-parser = "0.4.4"
 tango-bench = "0.6"
 insta = { version = "1.43.1" }
+tokio = { version = "1", features = ["rt"] }
 
 [[bench]]
 name = "converter"
