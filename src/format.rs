@@ -1,5 +1,18 @@
 use std::fmt::Display;
 
+macro_rules! conwrite {
+    ($dst:expr, $($arg:expr),*) => {
+        (|| {
+        $(
+            $dst.write_fmt(format_args!("{}", $arg))?;
+        )*
+        let res: std::fmt::Result = Ok(());
+        res
+        })()
+    };
+}
+pub(crate) use conwrite;
+
 pub(crate) trait FastDisplay {
     fn fast_display(&self) -> impl Display + Copy + use<Self>;
 }

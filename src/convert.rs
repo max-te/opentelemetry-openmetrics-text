@@ -3,7 +3,7 @@ use std::fmt::{Display, Write};
 use std::hash::{DefaultHasher, Hasher};
 use std::time::SystemTime;
 
-use crate::fast_display::FastDisplay;
+use crate::format::{FastDisplay, conwrite};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::metrics::data::{
@@ -195,18 +195,6 @@ fn make_scope_name_attrs(scope_name: &str) -> Option<KeyValue> {
     } else {
         None
     }
-}
-
-macro_rules! conwrite {
-    ($dst:expr, $($arg:expr),*) => {
-        (|| {
-        $(
-            $dst.write_fmt(format_args!("{}", $arg))?;
-        )*
-        let res: std::fmt::Result = Ok(());
-        res
-        })()
-    };
 }
 
 fn write_histogram<T: FastDisplay + Copy>(
