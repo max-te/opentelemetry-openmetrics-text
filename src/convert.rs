@@ -16,9 +16,14 @@ use unit::get_unit_suffixes;
 mod tests;
 mod unit;
 
+/// The mime type of the text produced by this metrics formatter.
 pub const MIME_TYPE: &str = "application/openmetrics-text; version=1.0.0; charset=utf-8";
+
+/// Trait to write the metrics data in OpenMetrics text format.
 pub trait WriteOpenMetrics {
+    /// Writes the metrics into `f` in OpenMetrics text format.
     fn write_as_openmetrics(&self, f: &mut impl Write) -> std::fmt::Result;
+    /// Creates and returns a [String] of the metrics data in OpenMetrics text format.
     fn to_openmetrics_string(&self) -> Result<String, std::fmt::Error> {
         let mut out = String::new();
         self.write_as_openmetrics(&mut out)?;
@@ -26,28 +31,42 @@ pub trait WriteOpenMetrics {
     }
 }
 
+/// Serialization context for common variables needed during conversion.
 struct Context<'f, W: Write> {
+    /// the output [Write] reference
     f: &'f mut W,
+    /// a temporary buffer to store the serialized metric attributes
     attr_buffer: String,
+    /// the sanitized name of the current metric
     name: String,
+    /// the converted unit string of the current metric
     unit: Option<Cow<'static, str>>,
+    /// the OpenMetrics metric type of the current metric
     typ: &'static str,
+    /// the name of the current scope
     scope_name: &'f str,
 }
 
-impl WriteOpenMetrics for ResourceMetrics {
-    fn write_as_openmetrics(&self, f: &mut impl Write) -> std::fmt::Result {
-        // TODO: let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
-
-        let mut ctx = Context {
+impl<'f, W: Write> Context<'f, W> {
+    fn with_output(f: &'f mut W) -> Self {
+        Context {
             f,
             attr_buffer: String::with_capacity(256),
             name: String::with_capacity(64),
             unit: None,
             typ: "",
             scope_name: "",
-        };
+        }
+    }
+}
 
+impl WriteOpenMetrics for ResourceMetrics {
+    fn write_as_openmetrics(&self, f: &mut impl Write) -> std::fmt::Result {
+        // TODO: let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
+        // write these into a `target_info` metric
+        // (https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#resource-attributes-1)
+
+        let mut ctx = Context::with_output(f);
         let mut scopes: Vec<&ScopeMetrics> = self.scope_metrics().collect();
         scopes.sort_unstable_by_key(|s| s.scope().name());
 
@@ -95,6 +114,37 @@ fn extract_type_unit_and_name(ctx: &mut Context<'_, impl Write>, metric: &Metric
     true
 }
 
+/// Gets the OpenMetrics metric type for this [AggregatedMetrics].
+/// Returns `Err(())` for unsupported metric types.
+fn get_type(metric: &AggregatedMetrics) -> Result<&'static str, ()> {
+    fn get_metric_data_type<T>(metric_data: &MetricData<T>) -> Result<&'static str, ()> {
+        match metric_data {
+            MetricData::Gauge(_) => Ok("gauge"),
+            MetricData::Sum(sum) => {
+                if sum.is_monotonic() {
+                    Ok("counter")
+                } else {
+                    Ok("gauge")
+                }
+            }
+            MetricData::Histogram(hist) => {
+                if hist.temporality() == Temporality::Cumulative {
+                    Ok("histogram")
+                } else {
+                    Err(())
+                }
+            }
+            _ => Err(()),
+        }
+    }
+    match metric {
+        AggregatedMetrics::F64(metric_data) => get_metric_data_type(metric_data),
+        AggregatedMetrics::U64(metric_data) => get_metric_data_type(metric_data),
+        AggregatedMetrics::I64(metric_data) => get_metric_data_type(metric_data),
+    }
+}
+
+/// Write the current metric's metadata. Make sure to call [extract_type_unit_and_name] first.
 #[inline]
 fn write_header(ctx: &mut Context<'_, impl Write>, description: &str) -> std::fmt::Result {
     let Context {
@@ -119,9 +169,10 @@ fn write_header(ctx: &mut Context<'_, impl Write>, description: &str) -> std::fm
     Ok(())
 }
 
+/// Write a otel_scope metric of type info for all scopes in `metrics`
+/// according to the [spec](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#instrumentation-scope-1).
 #[cfg(feature = "otel_scope_info")]
 fn write_otel_scope_info(f: &mut impl Write, metrics: &'_ Vec<&ScopeMetrics>) -> std::fmt::Result {
-    // Reference https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#instrumentation-scope-1
     f.write_str("# TYPE otel_scope info\n")?;
 
     for scope in metrics {
@@ -139,28 +190,7 @@ fn write_otel_scope_info(f: &mut impl Write, metrics: &'_ Vec<&ScopeMetrics>) ->
     Ok(())
 }
 
-fn get_type(metric: &AggregatedMetrics) -> Result<&'static str, ()> {
-    fn get_metric_data_type<T>(metric_data: &MetricData<T>) -> Result<&'static str, ()> {
-        match metric_data {
-            MetricData::Gauge(_) => Ok("gauge"),
-            MetricData::Sum(sum) => {
-                if sum.is_monotonic() {
-                    Ok("counter")
-                } else {
-                    Ok("gauge")
-                }
-            }
-            MetricData::Histogram(_) => Ok("histogram"),
-            MetricData::ExponentialHistogram(_) => Err(()),
-        }
-    }
-    match metric {
-        AggregatedMetrics::F64(metric_data) => get_metric_data_type(metric_data),
-        AggregatedMetrics::U64(metric_data) => get_metric_data_type(metric_data),
-        AggregatedMetrics::I64(metric_data) => get_metric_data_type(metric_data),
-    }
-}
-
+/// Write all data points for this metric
 fn write_values(ctx: &mut Context<'_, impl Write>, metric: &AggregatedMetrics) -> std::fmt::Result {
     match metric {
         AggregatedMetrics::F64(metric_data) => {
@@ -168,32 +198,23 @@ fn write_values(ctx: &mut Context<'_, impl Write>, metric: &AggregatedMetrics) -
                 MetricData::Gauge(gauge) => write_gauge(ctx, gauge),
                 MetricData::Sum(sum) => write_counter(ctx, sum),
                 MetricData::Histogram(histogram) => write_histogram(ctx, histogram),
+                _ => unimplemented!("only gauge/sum/histogram metrics should be constructible"),
                 // See https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#exponential-histograms
                 // for exponential histograms
-                _ => unimplemented!(),
             }
         }
         AggregatedMetrics::U64(metric_data) => match metric_data {
             MetricData::Gauge(gauge) => write_gauge(ctx, gauge),
             MetricData::Sum(sum) => write_counter(ctx, sum),
             MetricData::Histogram(histogram) => write_histogram(ctx, histogram),
-            _ => unimplemented!(),
+            _ => unimplemented!("only gauge/sum/histogram metrics should be constructible"),
         },
         AggregatedMetrics::I64(metric_data) => match metric_data {
             MetricData::Gauge(gauge) => write_gauge(ctx, gauge),
             MetricData::Sum(sum) => write_counter(ctx, sum),
             MetricData::Histogram(histogram) => write_histogram(ctx, histogram),
-            _ => unimplemented!(),
+            _ => unimplemented!("only gauge/sum/histogram metrics should be constructible"),
         },
-    }
-}
-
-#[inline(always)]
-fn make_scope_name_attrs(scope_name: &str) -> Option<KeyValue> {
-    if cfg!(feature = "otel_scope_info") {
-        Some(KeyValue::new("otel_scope_name", scope_name.to_owned()))
-    } else {
-        None
     }
 }
 
@@ -367,25 +388,17 @@ fn write_gauge<T: FastDisplay + Copy>(
     Ok(())
 }
 
-fn to_timestamp(time: SystemTime) -> impl Display {
-    let ts = time
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs_f64();
-    ts.fast_display()
-}
-
-fn hash_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> u64 {
-    let mut hash = 0;
-    for kv in attrs {
-        let mut hasher = DefaultHasher::default();
-        hasher.write(kv.key.as_str().as_bytes());
-        hasher.write(kv.value.as_str().as_bytes());
-        hash ^= hasher.finish(); // XOR to be order-invariant
+/// Makes an `otel_scope_name` attribute with the specified `scope_name` if the `otel_scope_info` feature is active.
+#[inline(always)]
+fn make_scope_name_attrs(scope_name: &str) -> Option<KeyValue> {
+    if cfg!(feature = "otel_scope_info") {
+        Some(KeyValue::new("otel_scope_name", scope_name.to_owned()))
+    } else {
+        None
     }
-    hash
 }
 
+/// Write the attribute string for attrs. Does not write curly braces.
 fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>>(
     f: &mut impl std::fmt::Write,
     attrs: I,
@@ -408,6 +421,20 @@ fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>>(
     Ok(())
 }
 
+/// Calculates a hash of the [KeyValue] pairs which is invariant under reordering of the [KeyValue]s within the [Iterator].
+fn hash_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> u64 {
+    let mut hash = 0;
+    for kv in attrs {
+        let mut hasher = DefaultHasher::default();
+        hasher.write(kv.key.as_str().as_bytes());
+        hasher.write(kv.value.as_str().as_bytes());
+        hash ^= hasher.finish(); // XOR to be order-invariant
+    }
+    hash
+}
+
+/// Writes to `f` the contents of `value` as an escaped string. Does not put quotes around the value.
+/// The chars to escape are `\`, `"` and `\n`.
 fn write_escaped(f: &mut impl Write, value: &str) -> std::fmt::Result {
     #[inline]
     fn next_escape_char(bytes: &[u8]) -> Option<usize> {
@@ -423,26 +450,31 @@ fn write_escaped(f: &mut impl Write, value: &str) -> std::fmt::Result {
 
     while let Some(next_escape) = next_escape_char(bytes) {
         let (head, tail) = bytes.split_at(next_escape);
-        f.write_str(str::from_utf8(head).unwrap())?;
+        f.write_str(str::from_utf8(head).expect("escapable chars should be on a char boundary"))?;
         match tail[0] {
             b'\\' => f.write_str("\\\\"),
             b'"' => f.write_str("\\\""),
             b'\n' => f.write_str("\\n"),
-            _ => unreachable!(),
+            _ => unreachable!("next_escape_char should find one of the 3 escapable chars"),
         }?;
         bytes = &tail[1..];
     }
-    f.write_str(str::from_utf8(bytes).unwrap())
+    f.write_str(str::from_utf8(bytes).expect("escaped string should be valid utf-8"))
 }
 
+/// Write `name` as an OpenMetrics metrics name, replacing any illegal characters with underscore according to the
+/// [spec](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#metric-metadata-1).
 fn write_sanitized_name(f: &mut impl Write, name: &str) -> std::fmt::Result {
-    // Reference https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#metric-metadata-1
+    // Multiple consecutive `_` characters MUST be replaced with a single `_` character
     let mut last_is_underscore = false;
+    // The name must not start with a digit
     if name.starts_with(|c: char| c.is_ascii_digit()) {
         f.write_char('_')?;
         last_is_underscore = true;
     }
     for c in name.chars() {
+        // Allowed characters are `a-z A-Z 0-9 : _`
+        // Invalid characters in the metric name MUST be replaced with the `_` character.
         if c.is_ascii_alphanumeric() || c == ':' {
             f.write_char(c)?;
             last_is_underscore = false;
@@ -454,4 +486,13 @@ fn write_sanitized_name(f: &mut impl Write, name: &str) -> std::fmt::Result {
         }
     }
     Ok(())
+}
+
+/// Get a [Display] implementation which shows [SystemTime] as a unix timestamp in float seconds.
+fn to_timestamp(time: SystemTime) -> impl Display {
+    let ts = time
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs_f64();
+    ts.fast_display()
 }
