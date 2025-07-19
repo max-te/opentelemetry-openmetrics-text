@@ -1,14 +1,14 @@
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
-use opentelemetry_sdk::metrics::data::ResourceMetrics;
+use opentelemetry_sdk::metrics::data::{
+    AggregatedMetrics, Gauge, Histogram, MetricData, ResourceMetrics, Sum,
+};
 use opentelemetry_sdk::metrics::reader::MetricReader;
 
 use crate::reader::TestMetricsReader;
 
-pub fn make_f64_gauge_metric(
-    values: Vec<(f64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Gauge<f64> {
+pub fn make_f64_gauge_metric(values: Vec<(f64, Vec<KeyValue>)>) -> Gauge<f64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -35,10 +35,7 @@ pub fn make_f64_gauge_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYGAUGE {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(
-                        opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge),
-                    ) = metric.data()
-                    {
+                    if let AggregatedMetrics::F64(MetricData::Gauge(gauge)) = metric.data() {
                         return gauge.clone();
                     }
                 }
@@ -68,9 +65,7 @@ fn test_make_f64_gauge_metric() {
     );
 }
 
-pub fn make_u64_gauge_metric(
-    values: Vec<(u64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Gauge<u64> {
+pub fn make_u64_gauge_metric(values: Vec<(u64, Vec<KeyValue>)>) -> Gauge<u64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -97,10 +92,7 @@ pub fn make_u64_gauge_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYGAUGE {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(
-                        opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge),
-                    ) = metric.data()
-                    {
+                    if let AggregatedMetrics::U64(MetricData::Gauge(gauge)) = metric.data() {
                         return gauge.clone();
                     }
                 }
@@ -130,9 +122,7 @@ fn test_make_u64_gauge_metric() {
     );
 }
 
-pub fn make_i64_gauge_metric(
-    values: Vec<(i64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Gauge<i64> {
+pub fn make_i64_gauge_metric(values: Vec<(i64, Vec<KeyValue>)>) -> Gauge<i64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -159,10 +149,7 @@ pub fn make_i64_gauge_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYGAUGE {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(
-                        opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge),
-                    ) = metric.data()
-                    {
+                    if let AggregatedMetrics::I64(MetricData::Gauge(gauge)) = metric.data() {
                         return gauge.clone();
                     }
                 }
@@ -192,9 +179,7 @@ fn test_make_i64_gauge_metric() {
     );
 }
 
-pub fn make_u64_counter_metric(
-    values: Vec<(u64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Sum<u64> {
+pub fn make_u64_counter_metric(values: Vec<(u64, Vec<KeyValue>)>) -> Sum<u64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -221,10 +206,7 @@ pub fn make_u64_counter_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYCOUNTER {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(
-                        opentelemetry_sdk::metrics::data::MetricData::Sum(sum),
-                    ) = metric.data()
-                    {
+                    if let AggregatedMetrics::U64(MetricData::Sum(sum)) = metric.data() {
                         return sum.clone();
                     }
                 }
@@ -254,9 +236,7 @@ fn test_make_u64_counter_metric() {
     );
 }
 
-pub fn make_f64_counter_metric(
-    values: Vec<(f64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Sum<f64> {
+pub fn make_f64_counter_metric(values: Vec<(f64, Vec<KeyValue>)>) -> Sum<f64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -283,10 +263,7 @@ pub fn make_f64_counter_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYCOUNTER {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(
-                        opentelemetry_sdk::metrics::data::MetricData::Sum(sum),
-                    ) = metric.data()
-                    {
+                    if let AggregatedMetrics::F64(MetricData::Sum(sum)) = metric.data() {
                         return sum.clone();
                     }
                 }
@@ -316,9 +293,7 @@ fn test_make_f64_counter_metric() {
     );
 }
 
-pub fn make_i64_counter_metric(
-    values: Vec<(i64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Sum<i64> {
+pub fn make_i64_counter_metric(values: Vec<(i64, Vec<KeyValue>)>) -> Sum<i64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -345,10 +320,7 @@ pub fn make_i64_counter_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYCOUNTER {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(
-                        opentelemetry_sdk::metrics::data::MetricData::Sum(sum),
-                    ) = metric.data()
-                    {
+                    if let AggregatedMetrics::I64(MetricData::Sum(sum)) = metric.data() {
                         return sum.clone();
                     }
                 }
@@ -378,9 +350,7 @@ fn test_make_i64_counter_metric() {
     );
 }
 
-pub fn make_f64_histogram_metric(
-    values: Vec<(f64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Histogram<f64> {
+pub fn make_f64_histogram_metric(values: Vec<(f64, Vec<KeyValue>)>) -> Histogram<f64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -407,9 +377,7 @@ pub fn make_f64_histogram_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYHISTOGRAM {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(
-                        opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram),
-                    ) = metric.data()
+                    if let AggregatedMetrics::F64(MetricData::Histogram(histogram)) = metric.data()
                     {
                         return histogram.clone();
                     }
@@ -454,9 +422,7 @@ fn test_make_f64_histogram_metric() {
     );
 }
 
-pub fn make_u64_histogram_metric(
-    values: Vec<(u64, Vec<KeyValue>)>,
-) -> opentelemetry_sdk::metrics::data::Histogram<u64> {
+pub fn make_u64_histogram_metric(values: Vec<(u64, Vec<KeyValue>)>) -> Histogram<u64> {
     let reader = TestMetricsReader::default();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader.clone())
@@ -483,9 +449,7 @@ pub fn make_u64_histogram_metric(
         if scope.scope().name() == scope_name {
             for metric in scope.metrics() {
                 if metric.name() == MYHISTOGRAM {
-                    if let opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(
-                        opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram),
-                    ) = metric.data()
+                    if let AggregatedMetrics::U64(MetricData::Histogram(histogram)) = metric.data()
                     {
                         return histogram.clone();
                     }

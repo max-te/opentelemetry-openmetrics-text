@@ -1,7 +1,9 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
+use opentelemetry_sdk::error::OTelSdkResult;
+use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::reader::MetricReader;
-use opentelemetry_sdk::metrics::{ManualReader, Temporality};
+use opentelemetry_sdk::metrics::{InstrumentKind, ManualReader, Pipeline, Temporality};
 
 #[derive(Debug, Clone)]
 pub struct TestMetricsReader {
@@ -17,33 +19,27 @@ impl Default for TestMetricsReader {
 }
 
 impl MetricReader for TestMetricsReader {
-    fn register_pipeline(&self, pipeline: std::sync::Weak<opentelemetry_sdk::metrics::Pipeline>) {
+    fn register_pipeline(&self, pipeline: Weak<Pipeline>) {
         self.inner.register_pipeline(pipeline);
     }
 
-    fn collect(
-        &self,
-        rm: &mut opentelemetry_sdk::metrics::data::ResourceMetrics,
-    ) -> opentelemetry_sdk::error::OTelSdkResult {
+    fn collect(&self, rm: &mut ResourceMetrics) -> OTelSdkResult {
         self.inner.collect(rm)
     }
 
-    fn force_flush(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+    fn force_flush(&self) -> OTelSdkResult {
         self.inner.force_flush()
     }
 
-    fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+    fn shutdown(&self) -> OTelSdkResult {
         self.inner.shutdown()
     }
 
-    fn shutdown_with_timeout(
-        &self,
-        timeout: std::time::Duration,
-    ) -> opentelemetry_sdk::error::OTelSdkResult {
+    fn shutdown_with_timeout(&self, timeout: std::time::Duration) -> OTelSdkResult {
         self.inner.shutdown_with_timeout(timeout)
     }
 
-    fn temporality(&self, _kind: opentelemetry_sdk::metrics::InstrumentKind) -> Temporality {
+    fn temporality(&self, _kind: InstrumentKind) -> Temporality {
         Temporality::Cumulative
     }
 }

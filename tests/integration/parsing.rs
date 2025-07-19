@@ -1,4 +1,4 @@
-use openmetrics_parser::openmetrics::parse_openmetrics;
+use openmetrics_parser::{ParseError, openmetrics::parse_openmetrics};
 use opentelemetry_openmetrics::convert::WriteOpenMetrics;
 
 use testsupport::resource_metrics::make_test_metrics;
@@ -14,11 +14,11 @@ pub fn test_output_is_parseable_by_openmetrics_parser() {
 
     if let Err(ref err) = parsed {
         match err {
-            openmetrics_parser::ParseError::ParseError(s) => {
+            ParseError::ParseError(s) => {
                 panic!("Parse error:\n{s}")
             }
-            openmetrics_parser::ParseError::DuplicateMetric => panic!("Duplicate metric!"),
-            openmetrics_parser::ParseError::InvalidMetric(s) => panic!(
+            ParseError::DuplicateMetric => panic!("Duplicate metric!"),
+            ParseError::InvalidMetric(s) => panic!(
                 "InvalidMetric:\n\
                 {s}\n\
                 Note: This parser is very strict (https://github.com/sinkingpoint/openmetrics-parser/issues/12)"
