@@ -178,12 +178,10 @@ fn test_write_values() {
         for metric in scope.metrics() {
             let mut output = String::new();
             let mut ctx = Context {
-                f: &mut output,
-                attr_buffer: String::from("staledata"),
-                name: metric.name().to_owned(),
-                unit: None,
-                typ: "",
                 scope_name,
+                name: metric.name().to_owned(),
+                attr_buffer: String::from("staledata"),
+                ..Context::with_output(&mut output)
             };
             let result = write_values(&mut ctx, metric.data());
 
@@ -210,12 +208,10 @@ fn test_write_gauge() {
     let mut output = String::new();
 
     let mut ctx = Context {
-        f: &mut output,
         attr_buffer: String::from("staledata"),
         name: "mygauge".to_owned(),
-        unit: None,
-        typ: "",
         scope_name: "myscope",
+        ..Context::with_output(&mut output)
     };
 
     write_gauge(&mut ctx, &metric).unwrap();
@@ -236,12 +232,10 @@ fn test_write_counter() {
     let mut output = String::new();
 
     let mut ctx = Context {
-        f: &mut output,
         attr_buffer: String::from("staledata"),
         name: "mycounter".to_owned(),
-        unit: None,
-        typ: "",
         scope_name: "myscope",
+        ..Context::with_output(&mut output)
     };
     write_counter(&mut ctx, &metric).unwrap();
 
@@ -274,12 +268,10 @@ fn test_write_histogram() {
     let mut output = String::new();
 
     let mut ctx = Context {
-        f: &mut output,
         attr_buffer: String::from("staledata"),
         name: "myhistogram".to_owned(),
-        unit: None,
-        typ: "",
         scope_name: "myscope",
+        ..Context::with_output(&mut output)
     };
     write_histogram(&mut ctx, &metric).unwrap();
     let output = output.replace(&ts, "<TIMESTAMP>");
