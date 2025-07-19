@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::{Display, Write};
 use std::hash::{DefaultHasher, Hasher};
 
@@ -21,56 +22,83 @@ pub trait WriteOpenMetrics {
     }
 }
 
+struct Context<'f, W: Write> {
+    f: &'f mut W,
+    attr_buffer: String,
+    name: String,
+    unit: Option<Cow<'static, str>>,
+    typ: &'static str,
+    scope_name: &'f str,
+}
+
 impl WriteOpenMetrics for ResourceMetrics {
     fn write_as_openmetrics(&self, f: &mut impl Write) -> std::fmt::Result {
         // TODO: let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
 
-        let mut temp_buffer = String::with_capacity(256);
-        let mut name = String::with_capacity(64);
+        let mut ctx = Context {
+            f,
+            attr_buffer: String::with_capacity(256),
+            name: String::with_capacity(64),
+            unit: None,
+            typ: "",
+            scope_name: "",
+        };
 
         let mut scopes: Vec<&ScopeMetrics> = self.scope_metrics().collect();
         scopes.sort_unstable_by_key(|s| s.scope().name());
 
         #[cfg(feature = "otel_scope_info")]
-        write_otel_scope_info(f, &scopes)?;
+        write_otel_scope_info(ctx.f, &scopes)?;
 
         for scope in scopes {
-            let scope_name = scope.scope().name();
-
+            if cfg!(feature = "otel_scope_info") {
+                ctx.scope_name = scope.scope().name();
+            }
             let mut metrics: Vec<_> = scope.metrics().collect();
             metrics.sort_unstable_by_key(|met| met.name());
 
             for metric in metrics {
-                let Ok(typ) = get_type(metric.data()) else {
+                if extract_type_unit_and_name(&mut ctx, metric) {
+                    write_header(&mut ctx, metric.description())?;
+                    write_values(&mut ctx, metric.data())?;
+                } else {
                     #[cfg(feature = "tracing")]
                     tracing::warn!("Unsupported metric type {metric:?}");
-                    continue;
-                };
-                name.clear();
-                write_sanitized_name(&mut name, metric.name())?;
-                let unit = get_unit_suffixes(metric.unit());
-                if let Some(ref unit) = unit {
-                    name.push('_');
-                    name.push_str(unit);
                 }
-
-                write_header(f, &name, typ, unit.as_deref(), metric.description())?;
-                write_values(f, &mut temp_buffer, scope_name, metric.data(), &name)?;
             }
         }
-        writeln!(f, "# EOF")?;
+        f.write_str("# EOF\n")?;
         Ok(())
     }
 }
 
+fn extract_type_unit_and_name(
+    ctx: &mut Context<'_, impl Write>,
+    metric: &opentelemetry_sdk::metrics::data::Metric,
+) -> bool {
+    let Ok(typ) = get_type(metric.data()) else {
+        return false;
+    };
+    ctx.typ = typ;
+    ctx.unit = get_unit_suffixes(metric.unit());
+
+    ctx.name.clear();
+    let Ok(_) = write_sanitized_name(&mut ctx.name, metric.name()) else {
+        return false;
+    };
+    if let Some(ref unit) = ctx.unit {
+        ctx.name.push('_');
+        ctx.name.push_str(unit);
+    }
+
+    true
+}
+
 #[inline]
-fn write_header(
-    f: &mut impl Write,
-    name: &str,
-    typ: &'static str,
-    unit: Option<&str>,
-    description: &str,
-) -> std::fmt::Result {
+fn write_header(ctx: &mut Context<'_, impl Write>, description: &str) -> std::fmt::Result {
+    let Context {
+        f, name, unit, typ, ..
+    } = ctx;
     for x in &["# TYPE ", name, " ", typ, "\n"] {
         f.write_str(x)?;
     }
@@ -143,23 +171,18 @@ fn get_type(
 }
 
 fn write_values(
-    f: &mut impl Write,
-    temp_buffer: &mut String,
-    scope_name: &str,
+    ctx: &mut Context<'_, impl Write>,
     metric: &opentelemetry_sdk::metrics::data::AggregatedMetrics,
-    name: &str,
 ) -> std::fmt::Result {
     match metric {
         opentelemetry_sdk::metrics::data::AggregatedMetrics::F64(metric_data) => {
             match metric_data {
                 opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                    write_gauge(f, name, scope_name, temp_buffer, gauge)
+                    write_gauge(ctx, gauge)
                 }
-                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                    write_counter(f, name, scope_name, temp_buffer, sum)
-                }
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => write_counter(ctx, sum),
                 opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                    write_histogram(f, name, scope_name, temp_buffer, histogram)
+                    write_histogram(ctx, histogram)
                 }
                 // See https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#exponential-histograms
                 // for exponential histograms
@@ -169,13 +192,11 @@ fn write_values(
         opentelemetry_sdk::metrics::data::AggregatedMetrics::U64(metric_data) => {
             match metric_data {
                 opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                    write_gauge(f, name, scope_name, temp_buffer, gauge)
+                    write_gauge(ctx, gauge)
                 }
-                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                    write_counter(f, name, scope_name, temp_buffer, sum)
-                }
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => write_counter(ctx, sum),
                 opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                    write_histogram(f, name, scope_name, temp_buffer, histogram)
+                    write_histogram(ctx, histogram)
                 }
                 _ => unimplemented!(),
             }
@@ -183,13 +204,11 @@ fn write_values(
         opentelemetry_sdk::metrics::data::AggregatedMetrics::I64(metric_data) => {
             match metric_data {
                 opentelemetry_sdk::metrics::data::MetricData::Gauge(gauge) => {
-                    write_gauge(f, name, scope_name, temp_buffer, gauge)
+                    write_gauge(ctx, gauge)
                 }
-                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => {
-                    write_counter(f, name, scope_name, temp_buffer, sum)
-                }
+                opentelemetry_sdk::metrics::data::MetricData::Sum(sum) => write_counter(ctx, sum),
                 opentelemetry_sdk::metrics::data::MetricData::Histogram(histogram) => {
-                    write_histogram(f, name, scope_name, temp_buffer, histogram)
+                    write_histogram(ctx, histogram)
                 }
                 _ => unimplemented!(),
             }
@@ -219,19 +238,26 @@ macro_rules! conwrite {
 }
 
 fn write_histogram<T: FastDisplay + Copy>(
-    f: &mut impl Write,
-    name: &str,
-    scope_name: &str,
-    temp_buffer: &mut String,
+    ctx: &mut Context<'_, impl Write>,
     histogram: &opentelemetry_sdk::metrics::data::Histogram<T>,
 ) -> std::fmt::Result {
-    let scope_name_attrs = make_scope_name_attrs(scope_name);
+    let scope_name_attrs = make_scope_name_attrs(ctx.scope_name);
     let ts = to_timestamp(histogram.time());
     let created = to_timestamp(histogram.start_time());
-    temp_buffer.clear();
-    let attrs = temp_buffer;
+    ctx.attr_buffer.clear();
+    let attrs = &mut ctx.attr_buffer;
     write_attrs(attrs, scope_name_attrs.iter())?;
-    conwrite!(f, name, "_created{", attrs, "} ", created, ' ', ts, '\n')?;
+    conwrite!(
+        ctx.f,
+        ctx.name,
+        "_created{",
+        attrs,
+        "} ",
+        created,
+        ' ',
+        ts,
+        '\n'
+    )?;
     assert_eq!(
         histogram.temporality(),
         opentelemetry_sdk::metrics::Temporality::Cumulative,
@@ -246,13 +272,15 @@ fn write_histogram<T: FastDisplay + Copy>(
         write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
 
         writeln!(
-            f,
+            ctx.f,
             "{name}_count{{{attrs}}} {value} {ts}",
+            name = ctx.name,
             value = point.count().fast_display(),
         )?;
         writeln!(
-            f,
+            ctx.f,
             "{name}_sum{{{attrs}}} {value} {ts}",
+            name = ctx.name,
             value = point.sum().fast_display(),
         )?;
 
@@ -284,8 +312,8 @@ fn write_histogram<T: FastDisplay + Copy>(
             cumulative_count += count;
             conwrite!(
                 // Not using write! here is a ~19% speedup
-                f,
-                name,
+                ctx.f,
+                ctx.name,
                 "_bucket{",
                 attrs,
                 "le=\"",
@@ -304,8 +332,9 @@ fn write_histogram<T: FastDisplay + Copy>(
             // )?;
         }
         writeln!(
-            f,
+            ctx.f,
             "{name}_bucket{{{attrs}le=\"+Inf\"}} {value} {ts}",
+            name = ctx.name,
             value = point.count().fast_display()
         )?;
     }
@@ -313,14 +342,11 @@ fn write_histogram<T: FastDisplay + Copy>(
 }
 
 fn write_counter<T: FastDisplay + Copy>(
-    f: &mut impl Write,
-    name: &str,
-    scope_name: &str,
-    temp_buffer: &mut String,
+    ctx: &mut Context<'_, impl Write>,
     sum: &opentelemetry_sdk::metrics::data::Sum<T>,
 ) -> std::fmt::Result {
-    let attrs = temp_buffer;
-    let scope_name_attrs = make_scope_name_attrs(scope_name);
+    let attrs = &mut ctx.attr_buffer;
+    let scope_name_attrs = make_scope_name_attrs(ctx.scope_name);
     assert_eq!(
         sum.temporality(),
         opentelemetry_sdk::metrics::Temporality::Cumulative,
@@ -337,8 +363,9 @@ fn write_counter<T: FastDisplay + Copy>(
             attrs.clear();
             write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
             writeln!(
-                f,
+                ctx.f,
                 "{name}_total{{{attrs}}} {value} {ts}",
+                name = ctx.name,
                 value = point.value().fast_display(),
             )?;
         }
@@ -348,8 +375,9 @@ fn write_counter<T: FastDisplay + Copy>(
             attrs.clear();
             write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
             writeln!(
-                f,
+                ctx.f,
                 "{name}{{{attrs}}} {value} {ts}",
+                name = ctx.name,
                 value = point.value().fast_display()
             )?;
         }
@@ -358,14 +386,11 @@ fn write_counter<T: FastDisplay + Copy>(
 }
 
 fn write_gauge<T: FastDisplay + Copy>(
-    f: &mut impl Write,
-    name: &str,
-    scope_name: &str,
-    temp_buffer: &mut String,
+    ctx: &mut Context<'_, impl Write>,
     gauge: &opentelemetry_sdk::metrics::data::Gauge<T>,
 ) -> std::fmt::Result {
-    let attrs = temp_buffer;
-    let scope_name_attrs = make_scope_name_attrs(scope_name);
+    let attrs = &mut ctx.attr_buffer;
+    let scope_name_attrs = make_scope_name_attrs(ctx.scope_name);
     let ts = to_timestamp(gauge.time());
     let mut points: Vec<_> = gauge.data_points().collect();
     points.sort_by_cached_key(|p| hash_attrs(p.attributes()));
@@ -373,8 +398,9 @@ fn write_gauge<T: FastDisplay + Copy>(
         attrs.clear();
         write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
         writeln!(
-            f,
+            ctx.f,
             "{name}{{{attrs}}} {value} {ts}",
+            name = ctx.name,
             value = point.value().fast_display()
         )?;
     }

@@ -177,14 +177,15 @@ fn test_write_values() {
 
         for metric in scope.metrics() {
             let mut output = String::new();
-            let mut temp_buffer = String::from("staledata");
-            let result = write_values(
-                &mut output,
-                &mut temp_buffer,
+            let mut ctx = Context {
+                f: &mut output,
+                attr_buffer: String::from("staledata"),
+                name: metric.name().to_owned(),
+                unit: None,
+                typ: "",
                 scope_name,
-                metric.data(),
-                metric.name(),
-            );
+            };
+            let result = write_values(&mut ctx, metric.data());
 
             assert!(result.is_ok());
             assert!(!output.is_empty());
@@ -207,12 +208,18 @@ fn test_write_gauge() {
         .to_string();
 
     let mut output = String::new();
-    let mut temp_buffer = String::from("staledata");
 
-    let result = write_gauge(&mut output, "mygauge", "myscope", &mut temp_buffer, &metric);
+    let mut ctx = Context {
+        f: &mut output,
+        attr_buffer: String::from("staledata"),
+        name: "mygauge".to_owned(),
+        unit: None,
+        typ: "",
+        scope_name: "myscope",
+    };
+
+    write_gauge(&mut ctx, &metric).unwrap();
     let output = output.replace(&ts, "<TIMESTAMP>");
-
-    assert!(result.is_ok());
     assert_snapshot!(output);
 }
 
@@ -227,18 +234,18 @@ fn test_write_counter() {
         .to_string();
 
     let mut output = String::new();
-    let mut temp_buffer = String::from("staledata");
 
-    let result = write_counter(
-        &mut output,
-        "mycounter",
-        "myscope",
-        &mut temp_buffer,
-        &metric,
-    );
+    let mut ctx = Context {
+        f: &mut output,
+        attr_buffer: String::from("staledata"),
+        name: "mycounter".to_owned(),
+        unit: None,
+        typ: "",
+        scope_name: "myscope",
+    };
+    write_counter(&mut ctx, &metric).unwrap();
+
     let output = output.replace(&ts, "<TIMESTAMP>");
-
-    assert!(result.is_ok());
     assert_snapshot!(output);
 }
 
@@ -265,18 +272,18 @@ fn test_write_histogram() {
         .to_string();
 
     let mut output = String::new();
-    let mut temp_buffer = String::from("staledata");
 
-    let result = write_histogram(
-        &mut output,
-        "myhistogram",
-        "myscope",
-        &mut temp_buffer,
-        &metric,
-    );
+    let mut ctx = Context {
+        f: &mut output,
+        attr_buffer: String::from("staledata"),
+        name: "myhistogram".to_owned(),
+        unit: None,
+        typ: "",
+        scope_name: "myscope",
+    };
+    write_histogram(&mut ctx, &metric).unwrap();
     let output = output.replace(&ts, "<TIMESTAMP>");
     let output = output.replace(&start_ts, "<START_TIMESTAMP>");
 
-    assert!(result.is_ok());
     assert_snapshot!(output);
 }
