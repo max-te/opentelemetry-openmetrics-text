@@ -26,6 +26,7 @@ impl WriteOpenMetrics for ResourceMetrics {
         // TODO: let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
 
         let mut temp_buffer = String::with_capacity(256);
+        let mut name = String::with_capacity(64);
 
         let mut scopes: Vec<&ScopeMetrics> = self.scope_metrics().collect();
         scopes.sort_unstable_by_key(|s| s.scope().name());
@@ -45,7 +46,7 @@ impl WriteOpenMetrics for ResourceMetrics {
                     tracing::warn!("Unsupported metric type {metric:?}");
                     continue;
                 };
-                let mut name = String::with_capacity(metric.name().len());
+                name.clear();
                 write_sanitized_name(&mut name, metric.name())?;
                 let unit = get_unit_suffixes(metric.unit());
                 if let Some(ref unit) = unit {
@@ -53,22 +54,40 @@ impl WriteOpenMetrics for ResourceMetrics {
                     name.push_str(unit);
                 }
 
-                writeln!(f, "# TYPE {name} {typ}")?;
-
-                if let Some(unit) = unit {
-                    writeln!(f, "# UNIT {name} {unit}")?;
-                }
-                if !metric.description().is_empty() {
-                    write!(f, "# HELP {name} ")?;
-                    write_escaped(f, metric.description())?;
-                    f.write_char('\n')?;
-                }
+                write_header(f, &name, typ, unit.as_deref(), metric.description())?;
                 write_values(f, &mut temp_buffer, scope_name, metric.data(), &name)?;
             }
         }
         writeln!(f, "# EOF")?;
         Ok(())
     }
+}
+
+#[inline]
+fn write_header(
+    f: &mut impl Write,
+    name: &str,
+    typ: &'static str,
+    unit: Option<&str>,
+    description: &str,
+) -> std::fmt::Result {
+    for x in &["# TYPE ", name, " ", typ, "\n"] {
+        f.write_str(x)?;
+    }
+
+    if let Some(unit) = unit {
+        for x in &["# UNIT ", name, " ", unit, "\n"] {
+            f.write_str(x)?;
+        }
+    }
+    if !description.is_empty() {
+        f.write_str("# HELP ")?;
+        f.write_str(name)?;
+        f.write_str(" ")?;
+        write_escaped(f, description)?;
+        f.write_char('\n')?;
+    }
+    Ok(())
 }
 
 #[cfg(feature = "otel_scope_info")]
