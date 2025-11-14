@@ -17,7 +17,8 @@ fn matches_snapshot() {
             .unwrap()
             .as_secs_f64()
             .to_string();
-        formatted = formatted.replace(&ts, &format!("<TIMESTAMP_{}>", i));
+        formatted = formatted.replace(&format!("{ts}\n"), &format!("<TIMESTAMP_{}>\n", i));
+        formatted = formatted.replace(&format!("{ts} "), &format!("<TIMESTAMP_{}> ", i));
     }
     assert_snapshot!(formatted);
 }

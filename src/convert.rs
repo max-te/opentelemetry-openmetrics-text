@@ -1,15 +1,16 @@
 use std::borrow::Cow;
-use std::fmt::{Display, Write};
+use std::fmt::Write;
 use std::hash::{DefaultHasher, Hasher};
 use std::time::SystemTime;
 
-use crate::format::{FastDisplay, conwrite};
+use crate::format::FastDisplay;
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::metrics::data::{
     AggregatedMetrics, Gauge, Histogram, MetricData, ResourceMetrics, Sum,
 };
 use opentelemetry_sdk::metrics::data::{Metric, ScopeMetrics};
+use ufmt::{uDisplay, uWrite, uwriteln};
 use unit::get_unit_suffixes;
 
 #[cfg(test)]
@@ -32,9 +33,9 @@ pub trait WriteOpenMetrics {
 }
 
 /// Serialization context for common variables needed during conversion.
-struct Context<'f, W: Write> {
+struct Context<'f, W: uWrite> {
     /// the output [Write] reference
-    f: &'f mut W,
+    f: W,
     /// a temporary buffer to store the serialized metric attributes
     attr_buffer: String,
     /// the sanitized name of the current metric
@@ -47,16 +48,30 @@ struct Context<'f, W: Write> {
     scope_name: &'f str,
 }
 
-impl<'f, W: Write> Context<'f, W> {
+impl<'f, W: Write> Context<'f, WriteAsUWrite<'f, W>> {
     fn with_output(f: &'f mut W) -> Self {
         Context {
-            f,
+            f: WriteAsUWrite(f),
             attr_buffer: String::with_capacity(256),
             name: String::with_capacity(64),
             unit: None,
             typ: "",
             scope_name: "",
         }
+    }
+}
+
+struct WriteAsUWrite<'w, W: Write>(&'w mut W);
+
+impl<'w, W: Write> uWrite for WriteAsUWrite<'w, W> {
+    type Error = std::fmt::Error;
+
+    fn write_str(&mut self, s: &str) -> Result<(), Self::Error> {
+        self.0.write_str(s)
+    }
+
+    fn write_char(&mut self, c: char) -> Result<(), Self::Error> {
+        self.0.write_char(c)
     }
 }
 
@@ -71,7 +86,7 @@ impl WriteOpenMetrics for ResourceMetrics {
         scopes.sort_unstable_by_key(|s| s.scope().name());
 
         #[cfg(feature = "otel_scope_info")]
-        write_otel_scope_info(ctx.f, &scopes)?;
+        write_otel_scope_info(&mut ctx.f, &scopes)?;
 
         for scope in scopes {
             if cfg!(feature = "otel_scope_info") {
@@ -95,7 +110,10 @@ impl WriteOpenMetrics for ResourceMetrics {
     }
 }
 
-fn extract_type_unit_and_name(ctx: &mut Context<'_, impl Write>, metric: &Metric) -> bool {
+fn extract_type_unit_and_name(
+    ctx: &mut Context<'_, impl uWrite<Error = std::fmt::Error>>,
+    metric: &Metric,
+) -> bool {
     let Ok(typ) = get_type(metric.data()) else {
         return false;
     };
@@ -103,9 +121,7 @@ fn extract_type_unit_and_name(ctx: &mut Context<'_, impl Write>, metric: &Metric
     ctx.unit = get_unit_suffixes(metric.unit());
 
     ctx.name.clear();
-    let Ok(_) = write_sanitized_name(&mut ctx.name, metric.name()) else {
-        return false;
-    };
+    let Ok(_) = write_sanitized_name(&mut ctx.name, metric.name());
     if let Some(ref unit) = ctx.unit {
         ctx.name.push('_');
         ctx.name.push_str(unit);
@@ -146,7 +162,7 @@ fn get_type(metric: &AggregatedMetrics) -> Result<&'static str, ()> {
 
 /// Write the current metric's metadata. Make sure to call [extract_type_unit_and_name] first.
 #[inline]
-fn write_header(ctx: &mut Context<'_, impl Write>, description: &str) -> std::fmt::Result {
+fn write_header<U: uWrite>(ctx: &mut Context<'_, U>, description: &str) -> Result<(), U::Error> {
     let Context {
         f, name, unit, typ, ..
     } = ctx;
@@ -172,7 +188,10 @@ fn write_header(ctx: &mut Context<'_, impl Write>, description: &str) -> std::fm
 /// Write a otel_scope metric of type info for all scopes in `metrics`
 /// according to the [spec](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#instrumentation-scope-1).
 #[cfg(feature = "otel_scope_info")]
-fn write_otel_scope_info(f: &mut impl Write, metrics: &'_ Vec<&ScopeMetrics>) -> std::fmt::Result {
+fn write_otel_scope_info<U: uWrite>(
+    f: &mut U,
+    metrics: &'_ Vec<&ScopeMetrics>,
+) -> Result<(), U::Error> {
     f.write_str("# TYPE otel_scope info\n")?;
 
     for scope in metrics {
@@ -191,7 +210,10 @@ fn write_otel_scope_info(f: &mut impl Write, metrics: &'_ Vec<&ScopeMetrics>) ->
 }
 
 /// Write all data points for this metric
-fn write_values(ctx: &mut Context<'_, impl Write>, metric: &AggregatedMetrics) -> std::fmt::Result {
+fn write_values<U: uWrite>(
+    ctx: &mut Context<'_, U>,
+    metric: &AggregatedMetrics,
+) -> Result<(), U::Error> {
     match metric {
         AggregatedMetrics::F64(metric_data) => {
             match metric_data {
@@ -218,26 +240,23 @@ fn write_values(ctx: &mut Context<'_, impl Write>, metric: &AggregatedMetrics) -
     }
 }
 
-fn write_histogram<T: FastDisplay + Copy>(
-    ctx: &mut Context<'_, impl Write>,
+fn write_histogram<T: FastDisplay + Copy, U: uWrite>(
+    ctx: &mut Context<'_, U>,
     histogram: &Histogram<T>,
-) -> std::fmt::Result {
+) -> Result<(), U::Error> {
     let scope_name_attrs = make_scope_name_attrs(ctx.scope_name);
     let ts = to_timestamp(histogram.time());
     let created = to_timestamp(histogram.start_time());
     ctx.attr_buffer.clear();
     let attrs = &mut ctx.attr_buffer;
-    write_attrs(attrs, scope_name_attrs.iter())?;
-    conwrite!(
+    let Ok(()) = write_attrs(attrs, scope_name_attrs.iter());
+    uwriteln!(
         ctx.f,
+        "{}_created{{{}}} {} {}"
         ctx.name,
-        "_created{",
         attrs,
-        "} ",
         created,
-        ' ',
         ts,
-        '\n'
     )?;
     assert_eq!(
         histogram.temporality(),
@@ -250,19 +269,23 @@ fn write_histogram<T: FastDisplay + Copy>(
 
     for point in points {
         attrs.clear();
-        write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
+        let Ok(()) = write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()));
 
-        writeln!(
+        uwriteln!(
             ctx.f,
-            "{name}_count{{{attrs}}} {value} {ts}",
-            name = ctx.name,
-            value = point.count().fast_display(),
+            "{}_count{{{}}} {} {}",
+            ctx.name,
+            attrs,
+            point.count().fast_display(),
+            ts
         )?;
-        writeln!(
+        uwriteln!(
             ctx.f,
-            "{name}_sum{{{attrs}}} {value} {ts}",
-            name = ctx.name,
-            value = point.sum().fast_display(),
+            "{}_sum{{{}}} {} {}",
+            ctx.name,
+            attrs,
+            point.sum().fast_display(),
+            ts,
         )?;
 
         #[cfg(feature = "histogram-min-max")]
@@ -291,19 +314,15 @@ fn write_histogram<T: FastDisplay + Copy>(
         let mut cumulative_count = 0;
         for (bound, count) in std::iter::zip(point.bounds(), point.bucket_counts()) {
             cumulative_count += count;
-            conwrite!(
+            uwriteln!(
                 // Not using write! here is a ~19% speedup
                 ctx.f,
+                "{}_bucket{{{}le=\"{}\"}} {} {}"
                 ctx.name,
-                "_bucket{",
                 attrs,
-                "le=\"",
                 bound.fast_display(),
-                "\"} ",
                 cumulative_count.fast_display(),
-                ' ',
                 ts,
-                '\n'
             )?;
             // writeln!(
             //     f,
@@ -312,20 +331,22 @@ fn write_histogram<T: FastDisplay + Copy>(
             //     count = cumulative_count.fast_display(),
             // )?;
         }
-        writeln!(
+        uwriteln!(
             ctx.f,
-            "{name}_bucket{{{attrs}le=\"+Inf\"}} {value} {ts}",
-            name = ctx.name,
-            value = point.count().fast_display()
+            "{}_bucket{{{}le=\"+Inf\"}} {} {}",
+            ctx.name,
+            attrs,
+            point.count().fast_display(),
+            ts,
         )?;
     }
     Ok(())
 }
 
-fn write_counter<T: FastDisplay + Copy>(
-    ctx: &mut Context<'_, impl Write>,
+fn write_counter<T: FastDisplay + Copy, U: uWrite>(
+    ctx: &mut Context<'_, U>,
     sum: &Sum<T>,
-) -> std::fmt::Result {
+) -> Result<(), U::Error> {
     let attrs = &mut ctx.attr_buffer;
     let scope_name_attrs = make_scope_name_attrs(ctx.scope_name);
     assert_eq!(
@@ -342,34 +363,38 @@ fn write_counter<T: FastDisplay + Copy>(
     if sum.is_monotonic() {
         for point in points {
             attrs.clear();
-            write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
-            writeln!(
+            let Ok(()) = write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()));
+            uwriteln!(
                 ctx.f,
-                "{name}_total{{{attrs}}} {value} {ts}",
-                name = ctx.name,
-                value = point.value().fast_display(),
+                "{}_total{{{}}} {} {}",
+                ctx.name,
+                attrs,
+                point.value().fast_display(),
+                ts,
             )?;
         }
         Ok(())
     } else {
         for point in points {
             attrs.clear();
-            write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
-            writeln!(
+            let Ok(()) = write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()));
+            uwriteln!(
                 ctx.f,
-                "{name}{{{attrs}}} {value} {ts}",
-                name = ctx.name,
-                value = point.value().fast_display()
+                "{}{{{}}} {} {}",
+                ctx.name,
+                attrs,
+                point.value().fast_display(),
+                ts,
             )?;
         }
         Ok(())
     }
 }
 
-fn write_gauge<T: FastDisplay + Copy>(
-    ctx: &mut Context<'_, impl Write>,
+fn write_gauge<T: FastDisplay + Copy, U: uWrite>(
+    ctx: &mut Context<'_, U>,
     gauge: &Gauge<T>,
-) -> std::fmt::Result {
+) -> Result<(), U::Error> {
     let attrs = &mut ctx.attr_buffer;
     let scope_name_attrs = make_scope_name_attrs(ctx.scope_name);
     let ts = to_timestamp(gauge.time());
@@ -377,12 +402,14 @@ fn write_gauge<T: FastDisplay + Copy>(
     points.sort_by_cached_key(|p| hash_attrs(p.attributes()));
     for point in points {
         attrs.clear();
-        write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()))?;
-        writeln!(
+        let Ok(()) = write_attrs(attrs, point.attributes().chain(scope_name_attrs.iter()));
+        uwriteln!(
             ctx.f,
-            "{name}{{{attrs}}} {value} {ts}",
-            name = ctx.name,
-            value = point.value().fast_display()
+            "{}{{{}}} {} {}",
+            ctx.name,
+            attrs,
+            point.value().fast_display(),
+            ts,
         )?;
     }
     Ok(())
@@ -399,10 +426,10 @@ fn make_scope_name_attrs(scope_name: &str) -> Option<KeyValue> {
 }
 
 /// Write the attribute string for attrs. Does not write curly braces.
-fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>>(
-    f: &mut impl std::fmt::Write,
+fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>, U: uWrite>(
+    f: &mut U,
     attrs: I,
-) -> std::fmt::Result {
+) -> Result<(), U::Error> {
     let mut first = true;
 
     let mut attrs: Vec<_> = attrs.collect();
@@ -435,7 +462,7 @@ fn hash_attrs<'a, I: Iterator<Item = &'a KeyValue>>(attrs: I) -> u64 {
 
 /// Writes to `f` the contents of `value` as an escaped string. Does not put quotes around the value.
 /// The chars to escape are `\`, `"` and `\n`.
-fn write_escaped(f: &mut impl Write, value: &str) -> std::fmt::Result {
+fn write_escaped<U: uWrite>(f: &mut U, value: &str) -> Result<(), U::Error> {
     #[inline]
     fn next_escape_char(bytes: &[u8]) -> Option<usize> {
         #[cfg(feature = "fast")]
@@ -464,7 +491,7 @@ fn write_escaped(f: &mut impl Write, value: &str) -> std::fmt::Result {
 
 /// Write `name` as an OpenMetrics metrics name, replacing any illegal characters with underscore according to the
 /// [spec](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#metric-metadata-1).
-fn write_sanitized_name(f: &mut impl Write, name: &str) -> std::fmt::Result {
+fn write_sanitized_name<U: uWrite>(f: &mut U, name: &str) -> Result<(), U::Error> {
     // Multiple consecutive `_` characters MUST be replaced with a single `_` character
     let mut last_is_underscore = false;
     // The name must not start with a digit
@@ -489,7 +516,7 @@ fn write_sanitized_name(f: &mut impl Write, name: &str) -> std::fmt::Result {
 }
 
 /// Get a [Display] implementation which shows [SystemTime] as a unix timestamp in float seconds.
-fn to_timestamp(time: SystemTime) -> impl Display {
+fn to_timestamp(time: SystemTime) -> impl uDisplay {
     let ts = time
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("Time went backwards")

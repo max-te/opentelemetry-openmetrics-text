@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use std::time::UNIX_EPOCH;
 
 use insta::assert_snapshot;
@@ -8,6 +7,7 @@ use testsupport::metric_data::{
     make_f64_gauge_metric, make_f64_histogram_metric, make_u64_counter_metric,
 };
 use testsupport::resource_metrics::make_test_metrics;
+use ufmt::uwrite;
 
 use super::*;
 
@@ -128,7 +128,7 @@ fn test_to_timestamp() {
     let time = UNIX_EPOCH + Duration::from_secs(1625097600);
     let timestamp = to_timestamp(time);
     let mut output = String::new();
-    write!(output, "{}", timestamp).unwrap();
+    uwrite!(output, "{}", timestamp).unwrap();
     assert_eq!(output, "1625097600");
 }
 

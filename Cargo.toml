@@ -1,6 +1,6 @@
 [package]
 name = "opentelemetry-openmetrics"
-version = "0.31.0"
+version = "0.31.1"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/max-te/opentelemetry-openmetrics-text/"
@@ -20,18 +20,19 @@ opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 memchr = { version = "2.7.5", optional = true }
 itoa = { version = "1.0.15", optional = true }
-ryu = { version = "1.0.20", optional = true }
+ryu = { version = "1.0.20" }
 tokio = { version = "1.45.1", default-features = false, features = [
     "sync",
 ], optional = true }
 tracing = { version = "0.1.41", optional = true }
+ufmt = { version = "0.2.0", features = ["std"] }
 
 [features]
 exporter = ["dep:tokio"]
 tracing = ["dep:tracing"]
 histogram-min-max = []
 otel_scope_info = []
-fast = ["dep:itoa", "dep:ryu", "dep:memchr"]
+fast = ["dep:itoa", "dep:memchr"]
 default = ["tracing", "exporter", "otel_scope_info", "fast"]
 
 [dev-dependencies]
