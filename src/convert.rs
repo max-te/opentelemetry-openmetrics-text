@@ -304,17 +304,23 @@ fn write_histogram<T: FastDisplay + Copy, U: uWrite>(
             // Non-compliant but useful
             // TODO: Expose as a separate gauge?
             if let Some(min) = point.min() {
-                writeln!(
-                    f,
-                    "{name}_min{{{attrs}}} {value} {ts}",
-                    value = min.fast_display()
+                uwriteln!(
+                    ctx.f,
+                    "{}_min{{{}}} {} {}",
+                    ctx.name,
+                    attrs,
+                    min.fast_display(),
+                    ts,
                 )?;
             }
             if let Some(max) = point.max() {
-                writeln!(
-                    f,
-                    "{name}_max{{{attrs}}} {value} {ts}",
-                    value = max.fast_display()
+                uwriteln!(
+                    ctx.f,
+                    "{}_max{{{}}} {} {}",
+                    ctx.name,
+                    attrs,
+                    max.fast_display(),
+                    ts,
                 )?;
             }
         }
