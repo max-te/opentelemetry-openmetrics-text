@@ -11,14 +11,13 @@ fn matches_snapshot() {
     let metrics = make_test_metrics();
     let erasable_timestamps = get_all_timestamps(&metrics);
     let mut formatted = metrics.to_openmetrics_string().unwrap();
-    for (i, ts) in erasable_timestamps.iter().enumerate() {
+    for (i, ts) in erasable_timestamps.iter().enumerate().rev() {
         let ts = ts
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs_f64()
             .to_string();
-        formatted = formatted.replace(&format!("{ts}\n"), &format!("<TIMESTAMP_{}>\n", i));
-        formatted = formatted.replace(&format!("{ts} "), &format!("<TIMESTAMP_{}> ", i));
+        formatted = formatted.replace(&format!("{ts}"), &format!("<TIMESTAMP_{}>", i));
     }
     assert_snapshot!(formatted);
 }
