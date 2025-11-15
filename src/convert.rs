@@ -4,7 +4,7 @@ use std::hash::{DefaultHasher, Hasher};
 use std::time::SystemTime;
 
 use crate::format::FastDisplay;
-use opentelemetry::KeyValue;
+use opentelemetry::{Key, KeyValue, Value};
 use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::metrics::data::{
     AggregatedMetrics, Gauge, Histogram, MetricData, ResourceMetrics, Sum,
@@ -77,11 +77,11 @@ impl<'w, W: Write> uWrite for WriteAsUWrite<'w, W> {
 
 impl WriteOpenMetrics for ResourceMetrics {
     fn write_as_openmetrics(&self, f: &mut impl Write) -> std::fmt::Result {
-        // TODO: let resource_attrs = self.0.resource().into_iter().collect::<Vec<_>>();
-        // write these into a `target_info` metric
-        // (https://github.com/open-telemetry/opentelemetry-specification/blob/v1.45.0/specification/compatibility/prometheus_and_openmetrics.md#resource-attributes-1)
-
         let mut ctx = Context::with_output(f);
+
+        #[cfg(feature = "otel_scope_info")]
+        write_target_info(&mut ctx.f, self.resource())?;
+
         let mut scopes: Vec<&ScopeMetrics> = self.scope_metrics().collect();
         scopes.sort_unstable_by_key(|s| s.scope().name());
 
@@ -108,6 +108,17 @@ impl WriteOpenMetrics for ResourceMetrics {
         f.write_str("# EOF\n")?;
         Ok(())
     }
+}
+
+fn write_target_info<U: uWrite>(
+    f: &mut U,
+    resource: &opentelemetry_sdk::Resource,
+) -> Result<(), U::Error> {
+    f.write_str("# TYPE target info\n")?;
+    f.write_str("target_info{")?;
+    write_attrs_tuple(f, resource.iter())?;
+    f.write_str("} 1\n")?;
+    Ok(())
 }
 
 fn extract_type_unit_and_name(
@@ -430,18 +441,25 @@ fn write_attrs<'a, I: Iterator<Item = &'a KeyValue>, U: uWrite>(
     f: &mut U,
     attrs: I,
 ) -> Result<(), U::Error> {
+    write_attrs_tuple(f, attrs.map(|kv| (&kv.key, &kv.value)))
+}
+
+fn write_attrs_tuple<'a, I: Iterator<Item = (&'a Key, &'a Value)>, U: uWrite>(
+    f: &mut U,
+    attrs: I,
+) -> Result<(), U::Error> {
     let mut first = true;
 
     let mut attrs: Vec<_> = attrs.collect();
-    attrs.sort_unstable_by_key(|attr| &attr.key);
+    attrs.sort_unstable_by_key(|attr| attr.0);
 
     for attr in attrs {
         if !first {
             f.write_char(',')?;
         }
-        write_sanitized_name(f, attr.key.as_str())?;
+        write_sanitized_name(f, attr.0.as_str())?;
         f.write_str("=\"")?;
-        write_escaped(f, &attr.value.as_str())?;
+        write_escaped(f, &attr.1.as_str())?;
         f.write_char('"')?;
         first = false;
     }

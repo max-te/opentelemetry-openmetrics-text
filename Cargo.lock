@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-openmetrics"
-version = "0.31.1"
+version = "0.31.2"
 dependencies = [
  "insta",
  "itoa",
